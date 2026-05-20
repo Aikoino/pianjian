@@ -15,7 +15,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/your-username/pianjian.git
+git clone https://github.com/Aikoino/pianjian.git
 cd pianjian
 
 # 2. 安装依赖
