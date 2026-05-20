@@ -13,7 +13,7 @@
 
 ## 快速使用（便携版）
 
-从 [Releases](https://github.com/Aikoino/pianjian/releases) 下载 `片笺_v1.0.0_portable.zip`，解压后双击 `片笺.exe` 即可运行。
+从 [Releases](https://github.com/Aikoino/pianjian/releases) 下载 `pianjian_v1.0.0_portable.zip`，解压后双击 `片笺.exe` 即可运行。
 
 - 体积：**83 MB**（< 100 MB）
 - 无需安装，解压即用
