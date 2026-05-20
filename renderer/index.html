@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>片笺</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/title-bar.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <link rel="stylesheet" href="css/notes.css">
+  <link rel="stylesheet" href="css/snap-handles.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- 贴边书签把手 -->
+    <div class="snap-handles" id="snap-handles">
+      <div class="snap-handle snap-handle--daily">
+        <span class="snap-handle__dot snap-handle__dot--daily"></span>
+        <span class="snap-handle__label">今日</span>
+        <span class="snap-handle__count snap-handle__count--daily"></span>
+      </div>
+      <div class="snap-handle snap-handle--weekly">
+        <span class="snap-handle__dot snap-handle__dot--weekly"></span>
+        <span class="snap-handle__label">周</span>
+        <span class="snap-handle__count snap-handle__count--weekly"></span>
+      </div>
+      <div class="snap-handle snap-handle--normal">
+        <span class="snap-handle__dot snap-handle__dot--normal"></span>
+        <span class="snap-handle__label">便签</span>
+        <span class="snap-handle__count snap-handle__count--normal"></span>
+      </div>
+      <div class="snap-handle snap-handle--timeline">
+        <span class="snap-handle__dot snap-handle__dot--timeline"></span>
+        <span class="snap-handle__label">时间轴</span>
+        <span class="snap-handle__count snap-handle__count--timeline"></span>
+      </div>
+    </div>
+
+    <!-- 自定义标题栏 -->
+    <header class="title-bar">
+      <div class="title-bar__drag-area"></div>
+      <div class="title-bar__search-wrap" id="search-wrap">
+        <button class="title-bar__btn title-bar__search-toggle" id="btn-search" title="搜索">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </button>
+        <input class="title-bar__search" id="search-input" placeholder="搜索便签…">
+      </div>
+      <div class="title-bar__actions">
+        <button class="title-bar__btn title-bar__btn--add" id="btn-add" title="添加便签">+</button>
+        <button class="title-bar__btn title-bar__btn--pin" id="btn-pin" title="置顶">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v6l4 4v4H8v-4l4-4V2z"/><line x1="8" y1="16" x2="16" y2="16"/>
+          </svg>
+        </button>
+        <button class="title-bar__btn title-bar__btn--minimize" id="btn-minimize" title="最小化">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button class="title-bar__btn title-bar__btn--close" id="btn-close" title="关闭">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 添加类型选择弹窗 -->
+      <div class="add-popup" id="add-popup">
+        <button class="add-popup__item" data-type="daily">
+          <span class="add-popup__dot add-popup__dot--daily"></span>今日待办
+        </button>
+        <button class="add-popup__item" data-type="weekly">
+          <span class="add-popup__dot add-popup__dot--weekly"></span>周待办
+        </button>
+        <button class="add-popup__item" data-type="normal">
+          <span class="add-popup__dot add-popup__dot--normal"></span>普通便签
+        </button>
+        <button class="add-popup__item" data-type="timeline">
+          <span class="add-popup__dot add-popup__dot--timeline"></span>时间轴
+        </button>
+      </div>
+    </header>
+
+    <!-- 内容区域 -->
+    <main class="content-area">
+      <nav class="sidebar" id="sidebar"></nav>
+      <div class="notes-area" id="notes-area"></div>
+    </main>
+
+    <!-- 右下角 resize 手柄 -->
+    <div class="resize-handle" id="resize-handle"></div>
+
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/notes.js"></script>
+  <script src="js/title-bar.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

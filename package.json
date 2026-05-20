@@ -1,0 +1,14 @@
+{
+  "name": "pianjian",
+  "version": "1.0.0",
+  "description": "片笺 - 轻量级桌面便签软件",
+  "main": "main.js",
+  "scripts": {
+    "start": "node start.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^22.3.27",
+    "ws": "^8.20.1"
+  }
+}

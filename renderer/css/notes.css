@@ -1,0 +1,167 @@
+.notes-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-card {
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  position: relative;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: cardIn 0.15s ease-out;
+  transition: opacity 0.2s;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.note-card--daily    { background: var(--color-daily-bg); }
+.note-card--weekly   { background: var(--color-weekly-bg); }
+.note-card--normal   { background: var(--color-normal-bg); }
+.note-card--timeline { background: var(--color-timeline-bg); }
+
+/* ---- 复选框 + 正文行 ---- */
+.note-card__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.note-card__check {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  border: 2px solid rgba(0,0,0,0.18);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 1px;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.note-card__check:hover {
+  border-color: rgba(0,0,0,0.35);
+}
+
+.note-card--completed .note-card__check {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.note-card--completed .note-card__check::after {
+  content: '✓';
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.note-card__body {
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 20px;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.note-card__body:empty::before {
+  content: '输入内容…';
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* ---- 完成 / 过期状态 ---- */
+.note-card--completed .note-card__body {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.note-card--expired .note-card__body {
+  color: #999;
+}
+
+.note-card--completed,
+.note-card--expired {
+  opacity: 0.65;
+}
+
+.note-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.note-card__delete {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.note-card:hover .note-card__delete {
+  opacity: 1;
+}
+
+.note-card__delete:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #b71c1c;
+}
+
+.note-card__date {
+  font-size: 11px;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  padding: 2px 4px;
+  color: var(--color-timeline-text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.note-card__date::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+/* ---- 空状态 ---- */
+.notes-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  gap: 6px;
+  opacity: 0.6;
+}
+
+.notes-empty__icon {
+  font-size: 32px;
+  line-height: 1;
+}

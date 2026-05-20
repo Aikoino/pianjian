@@ -1,0 +1,93 @@
+.sidebar {
+  width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 2px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+}
+
+.sidebar__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 40px;
+  padding: 8px 0;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--color-text-muted);
+  transition: background 0.12s, color 0.12s;
+  position: relative;
+}
+
+.sidebar__tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.sidebar__tab--active {
+  color: var(--color-text);
+}
+
+.sidebar__tab--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+}
+
+.sidebar__tab--daily.sidebar__tab--active::before   { background: var(--color-daily-text); }
+.sidebar__tab--weekly.sidebar__tab--active::before  { background: var(--color-weekly-text); }
+.sidebar__tab--normal.sidebar__tab--active::before  { background: var(--color-normal-text); }
+.sidebar__tab--timeline.sidebar__tab--active::before { background: var(--color-timeline-text); }
+
+.sidebar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar__dot--daily    { background: var(--color-daily-bg); }
+.sidebar__dot--weekly   { background: var(--color-weekly-bg); }
+.sidebar__dot--normal   { background: var(--color-normal-bg); }
+.sidebar__dot--timeline { background: var(--color-timeline-bg); }
+
+.sidebar__count {
+  font-size: 9px;
+  line-height: 1;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.sidebar__count--daily    { background: var(--color-daily-text); }
+.sidebar__count--weekly   { background: var(--color-weekly-text); }
+.sidebar__count--normal   { background: var(--color-normal-text); }
+.sidebar__count--timeline { background: var(--color-timeline-text); }
+
+.sidebar__count:empty {
+  display: none;
+}
+
+/* ---- 内容区布局 ---- */
+.content-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.notes-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
