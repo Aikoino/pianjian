@@ -264,6 +264,16 @@ ipcMain.on('window:togglePin', () => {
   mainWindow?.webContents.send('pin:changed', isPinned);
 });
 
+// ---- 开机启动 ----
+ipcMain.handle('autoLaunch:get', () => {
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.handle('autoLaunch:set', (_event, enabled) => {
+  app.setLoginItemSettings({ openAtLogin: enabled });
+  return enabled;
+});
+
 // ---- 数据操作 ----
 ipcMain.handle('notes:getAll', () => {
   return loadNotes();

@@ -38,6 +38,20 @@ function initTitleBar() {
     pinBtn.classList.toggle('active', pinned);
   });
 
+  // 开机自启切换
+  const autoLaunchBtn = document.getElementById('btn-autolaunch');
+
+  window.electronAPI.getAutoLaunch().then((enabled) => {
+    autoLaunchBtn.classList.toggle('active', enabled);
+  });
+
+  autoLaunchBtn.addEventListener('click', async () => {
+    const current = autoLaunchBtn.classList.contains('active');
+    const enabled = !current;
+    await window.electronAPI.setAutoLaunch(enabled);
+    autoLaunchBtn.classList.toggle('active', enabled);
+  });
+
   // 最小化
   minBtn.addEventListener('click', () => {
     window.electronAPI.minimize();

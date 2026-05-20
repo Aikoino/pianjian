@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startResize: () => ipcRenderer.send('resize:start'),
   endResize: () => ipcRenderer.send('resize:end'),
 
+  // 开机启动
+  getAutoLaunch: () => ipcRenderer.invoke('autoLaunch:get'),
+  setAutoLaunch: (enabled) => ipcRenderer.invoke('autoLaunch:set', enabled),
+
   // 数据操作
   getNotes: () => ipcRenderer.invoke('notes:getAll'),
   addNote: (note) => ipcRenderer.invoke('notes:add', note),
