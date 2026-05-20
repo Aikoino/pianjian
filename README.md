@@ -11,7 +11,15 @@
 - **本地存储**：JSON 文件（`%APPDATA%/pianjian/data.json`）
 - **依赖**：仅 `electron` + `ws`（同步功能预留）
 
-## 安装与运行
+## 快速使用（便携版）
+
+从 [Releases](https://github.com/Aikoino/pianjian/releases) 下载 `片笺_v1.0.0_portable.zip`，解压后双击 `片笺.exe` 即可运行。
+
+- 体积：**83 MB**（< 100 MB）
+- 无需安装，解压即用
+- 数据自动保存在 `%APPDATA%/pianjian/data.json`
+
+## 开发运行
 
 ```bash
 # 1. 克隆仓库
@@ -26,6 +34,13 @@ npm start
 ```
 
 > **注意**：如果从 VSCode 终端启动遇到 `ELECTRON_RUN_AS_NODE` 错误，请使用 `bash start.sh` 或在外部终端运行 `npm start`。
+
+### 构建便携版
+
+```bash
+npm run build
+# 输出: dist/片笺_v1.0.0_portable.zip
+```
 
 ## 功能使用说明
 

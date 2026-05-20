@@ -4,11 +4,44 @@
   "description": "片笺 - 轻量级桌面便签软件",
   "main": "main.js",
   "scripts": {
-    "start": "node start.js"
+    "start": "node start.js",
+    "build": "node scripts/build.js"
   },
   "license": "MIT",
   "dependencies": {
-    "electron": "^22.3.27",
     "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "electron": "^22.3.27",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.pianjian.app",
+    "productName": "片笺",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "start.js",
+      "renderer/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "extraResources": [],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "electronDist": "node_modules/electron/dist"
   }
 }
