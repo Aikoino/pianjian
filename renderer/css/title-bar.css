@@ -86,6 +86,7 @@
 
 .title-bar__btn--autolaunch.active {
   color: #2e7d32;
+  background: rgba(46,125,50,0.12);
 }
 
 .title-bar__btn--close:hover {

@@ -1,8 +1,13 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron');
+const path = require('path');
+const { exec } = require('child_process');
 const { loadNotes, saveNotes } = require('./server/data-store');
+const { getCloseAction, setCloseAction } = require('./server/config-store');
 
 let mainWindow = null;
 let isPinned = false;
+let tray = null;
+let isQuitting = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -12,6 +17,7 @@ function createWindow() {
     resizable: true,
     minWidth: 200,
     minHeight: 300,
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -31,6 +37,80 @@ function createWindow() {
     stopHoverPoll();
     stopResizePoll();
     mainWindow = null;
+  });
+}
+
+function createTrayIcon() {
+  // 生成 32x32 红色圆角方块托盘图标
+  const size = 32;
+  const radius = 6;
+  const buffer = Buffer.alloc(size * size * 4);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+      let inRect = true;
+      if (x < radius && y < radius && (radius - x) ** 2 + (radius - y) ** 2 > radius ** 2) inRect = false;
+      if (x >= size - radius && y < radius && (x - (size - radius)) ** 2 + (radius - y) ** 2 > radius ** 2) inRect = false;
+      if (x < radius && y >= size - radius && (radius - x) ** 2 + (y - (size - radius)) ** 2 > radius ** 2) inRect = false;
+      if (x >= size - radius && y >= size - radius && (x - (size - radius)) ** 2 + (y - (size - radius)) ** 2 > radius ** 2) inRect = false;
+
+      if (inRect) {
+        buffer[idx] = 0xB7;     // R
+        buffer[idx + 1] = 0x1C; // G
+        buffer[idx + 2] = 0x1C; // B
+        buffer[idx + 3] = 0xFF; // A
+      }
+    }
+  }
+  return nativeImage.createFromBuffer(buffer, { width: size, height: size });
+}
+
+function createTray() {
+  // 使用应用图标缩放为 16x16 托盘图标
+  let trayIcon;
+  try {
+    const iconPath = path.join(__dirname, 'build', 'icon.png');
+    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  } catch {
+    trayIcon = nativeImage.createEmpty();
+  }
+  tray = new Tray(trayIcon);
+  tray.setToolTip('片笺');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示/隐藏',
+      click: () => {
+        if (!mainWindow) return;
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  tray.on('double-click', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 }
 
@@ -255,7 +335,35 @@ ipcMain.on('window:minimize', () => {
 });
 
 ipcMain.on('window:close', () => {
-  mainWindow?.close();
+  if (!mainWindow) return;
+  const action = getCloseAction();
+  if (action === 'tray') { mainWindow.hide(); return; }
+  if (action === 'quit') { isQuitting = true; app.quit(); return; }
+
+  // 首次关闭：弹出选择对话框
+  const result = dialog.showMessageBoxSync(mainWindow, {
+    type: 'question',
+    title: '片笺',
+    message: '关闭窗口',
+    detail: '请选择关闭后的行为：',
+    buttons: ['最小化到系统托盘', '退出程序'],
+    defaultId: 0,
+    cancelId: 1,
+    checkboxLabel: '不再询问，记住我的选择',
+    checkboxChecked: false
+  });
+
+  const choice = result.response === 0 ? 'tray' : 'quit';
+  if (result.checkboxChecked) {
+    setCloseAction(choice);
+  }
+
+  if (choice === 'tray') {
+    mainWindow.hide();
+  } else {
+    isQuitting = true;
+    app.quit();
+  }
 });
 
 ipcMain.on('window:togglePin', () => {
@@ -265,13 +373,45 @@ ipcMain.on('window:togglePin', () => {
 });
 
 // ---- 开机启动 ----
+const AUTORUN_NAME = 'Pianjian';
+
+function runPowerShell(script, callback) {
+  const base64 = Buffer.from(script, 'utf16le').toString('base64');
+  exec(`powershell -NoProfile -EncodedCommand ${base64}`, callback);
+}
+
+function getLaunchTarget() {
+  if (app.isPackaged) {
+    return `"${process.execPath}"`;
+  }
+  return `"${process.execPath}" "${path.join(__dirname, 'main.js')}"`;
+}
+
 ipcMain.handle('autoLaunch:get', () => {
-  return app.getLoginItemSettings().openAtLogin;
+  return new Promise((resolve) => {
+    const ps = `if (Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }`;
+    runPowerShell(ps, (err) => {
+      resolve(!err);
+    });
+  });
 });
 
 ipcMain.handle('autoLaunch:set', (_event, enabled) => {
-  app.setLoginItemSettings({ openAtLogin: enabled });
-  return enabled;
+  return new Promise((resolve) => {
+    if (enabled) {
+      const target = getLaunchTarget();
+      const ps = `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -Value '${target}' -Type String -Force`;
+      runPowerShell(ps, (err) => {
+        if (err) { console.error('autoLaunch set error:', err); resolve(false); }
+        else resolve(true);
+      });
+    } else {
+      const ps = `Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -ErrorAction SilentlyContinue -Force`;
+      runPowerShell(ps, (err) => {
+        resolve(true);
+      });
+    }
+  });
 });
 
 // ---- 数据操作 ----
@@ -300,8 +440,22 @@ ipcMain.handle('notes:delete', (_event, id) => {
   saveNotes(notes);
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+
+  // 开机自启时，启动后自动隐藏到托盘
+  if (app.getLoginItemSettings().openAtLogin) {
+    mainWindow?.hide();
+  } else {
+    mainWindow?.show();
+  }
+});
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // 不退出，保持在托盘
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });

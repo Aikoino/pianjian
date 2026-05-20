@@ -45,11 +45,11 @@ function initTitleBar() {
     autoLaunchBtn.classList.toggle('active', enabled);
   });
 
-  autoLaunchBtn.addEventListener('click', async () => {
-    const current = autoLaunchBtn.classList.contains('active');
-    const enabled = !current;
-    await window.electronAPI.setAutoLaunch(enabled);
+  autoLaunchBtn.addEventListener('click', () => {
+    const enabled = !autoLaunchBtn.classList.contains('active');
+    // 乐观更新：先切换 UI，再异步写注册表
     autoLaunchBtn.classList.toggle('active', enabled);
+    window.electronAPI.setAutoLaunch(enabled);
   });
 
   // 最小化
