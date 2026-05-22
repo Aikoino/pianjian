@@ -132,11 +132,12 @@ pianjian/
 
 ## 路线图
 
-- [ ] WebSocket 同步服务（端口 9527）
-- [ ] HTTP 静态服务 + UDP 广播发现
-- [ ] Android PWA 跨端同步
-- [ ] 系统托盘图标
-- [ ] 启动时自动最小化到托盘
+完整开发计划请查看 [ROADMAP.md](ROADMAP.md)。
+
+当前重点：
+- WebSocket 局域网同步
+- 提醒功能完善
+- 数据导入/导出
 
 ## 许可
 
