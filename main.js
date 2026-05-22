@@ -1,18 +1,120 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const { loadNotes, saveNotes } = require('./server/data-store');
-const { getCloseAction, setCloseAction } = require('./server/config-store');
+const { getCloseAction, setCloseAction, getWindowBounds, setWindowBounds, getSnapState, setSnapState, clearSnapState, getIsPinned, setIsPinned } = require('./server/config-store');
 
 let mainWindow = null;
 let isPinned = false;
 let tray = null;
 let isQuitting = false;
 
+// ---- 便签提醒 ----
+let reminderInterval = null;
+
+function startReminderCheck() {
+  // 每分钟检查一次是否有到期的提醒
+  reminderInterval = setInterval(checkReminders, 60000);
+  checkReminders(); // 启动时立即检查一次
+}
+
+function stopReminderCheck() {
+  if (reminderInterval) {
+    clearInterval(reminderInterval);
+    reminderInterval = null;
+  }
+}
+
+function checkReminders() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const notes = loadNotes();
+  const now = new Date();
+  const triggered = [];
+  let modified = false;
+
+  notes.forEach(note => {
+    if (!note.remindAt) return;
+    // 仅 timeline 和 daily 类型触发提醒
+    if (note.type !== 'timeline' && note.type !== 'daily') return;
+    try {
+      const remindTime = new Date(note.remindAt);
+      if (remindTime <= now) {
+        triggered.push(note);
+        note.remindAt = undefined;
+        note.updatedAt = new Date().toISOString();
+        modified = true;
+      }
+    } catch (e) {
+      // 日期解析异常，清除坏数据
+      console.error('提醒时间解析失败:', note.remindAt, e);
+      note.remindAt = undefined;
+      note.updatedAt = new Date().toISOString();
+      modified = true;
+    }
+  });
+
+  if (modified) {
+    saveNotes(notes);
+  }
+
+  if (triggered.length > 0) {
+    triggered.forEach(note => {
+      triggerReminder(note);
+    });
+  }
+}
+
+function triggerReminder(note) {
+  // 1. 弹出窗口（如果贴边隐藏中或已隐藏）
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (snapState && !snapState.isShowing) {
+        showWindow();
+      } else if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      mainWindow.focus();
+    }
+  } catch (e) {
+    console.error('提醒弹窗失败:', e);
+  }
+
+  // 2. 发送 IPC 到渲染进程
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('reminder:triggered', note.id);
+    }
+  } catch (e) {
+    console.error('提醒 IPC 发送失败:', e);
+  }
+
+  // 3. 显示 Windows 系统通知（Toast Notification）
+  try {
+    const notification = new Notification({
+      title: '片笺 - 便签提醒',
+      body: (note.content || '(无内容)').substring(0, 200),
+      icon: path.join(__dirname, 'build', 'icon.png')
+    });
+    notification.on('click', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    notification.show();
+  } catch (e) {
+    console.error('系统通知失败:', e);
+  }
+}
+
 function createWindow() {
+  // 恢复上次的窗口位置和大小
+  const savedBounds = getWindowBounds();
   mainWindow = new BrowserWindow({
-    width: 340,
-    height: 420,
+    width: savedBounds?.width || 340,
+    height: savedBounds?.height || 420,
+    x: savedBounds?.x,
+    y: savedBounds?.y,
     frame: false,
     transparent: true,
     resizable: true,
@@ -27,8 +129,20 @@ function createWindow() {
   });
 
   mainWindow.loadFile('renderer/index.html');
+
+  // 恢复置顶状态
+  const savedPinned = getIsPinned();
+  if (savedPinned) {
+    isPinned = true;
+    mainWindow.setAlwaysOnTop(true);
+  }
+
   setupSnap();
   setupResizeConstraints();
+
+  // 拖动和缩放时保存位置
+  mainWindow.on('move', scheduleSaveBounds);
+  mainWindow.on('resize', scheduleSaveBounds);
 
   mainWindow.on('blur', () => {
     if (snapState && snapState.isShowing) hideWindow();
@@ -142,6 +256,17 @@ function setPosSafely(x, y) {
   setTimeout(() => { ignoreMove = false; }, 150);
 }
 
+// ---- 窗口位置持久化 ----
+let saveBoundsTimer = null;
+function scheduleSaveBounds() {
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const bounds = mainWindow.getBounds();
+    setWindowBounds(bounds);
+  }, 300);
+}
+
 function setupSnap() {
   mainWindow.on('move', () => {
     if (ignoreMove || !mainWindow) return;
@@ -187,6 +312,7 @@ function setupSnap() {
       }
 
       snapState = { edge, hiddenX, hiddenY: visibleY, visibleX, visibleY, isShowing: false };
+      setSnapState({ edge, hiddenX, hiddenY: visibleY, visibleX, visibleY });
       setPosSafely(hiddenX, visibleY);
       mainWindow.webContents.send('snap:changed', { snapped: true, edge, showing: false });
       startHoverPoll();
@@ -304,6 +430,7 @@ function unsnap() {
   stopHoverPoll();
   clearTimeout(snapPending);
   snapState = null;
+  clearSnapState();
   unsnapCooldown = true;
   setTimeout(() => { unsnapCooldown = false; }, 800);
   mainWindow.webContents.send('snap:changed', { snapped: false, edge: null });
@@ -338,7 +465,7 @@ ipcMain.on('window:minimize', () => {
 ipcMain.on('window:close', async () => {
   if (!mainWindow) return;
   const action = getCloseAction();
-  if (action === 'tray') { mainWindow.hide(); return; }
+  if (action === 'tray') { scheduleSaveBounds(); mainWindow.hide(); return; }
   if (action === 'quit') { isQuitting = true; app.quit(); return; }
 
   // 首次关闭：弹出选择对话框
@@ -372,6 +499,7 @@ ipcMain.on('window:togglePin', () => {
   isPinned = !isPinned;
   mainWindow?.setAlwaysOnTop(isPinned);
   mainWindow?.webContents.send('pin:changed', isPinned);
+  setIsPinned(isPinned);
 });
 
 // ---- 开机启动 ----
@@ -442,11 +570,35 @@ ipcMain.handle('notes:delete', (_event, id) => {
   saveNotes(notes);
 });
 
+ipcMain.handle('notes:setReminder', (_event, id, remindAt) => {
+  const notes = loadNotes();
+  const note = notes.find(n => n.id === id);
+  if (note) {
+    note.remindAt = remindAt || undefined; // 取消提醒时清除（避免 JSON 残留 null）
+    note.updatedAt = new Date().toISOString();
+    saveNotes(notes);
+    return true;
+  }
+  return false;
+});
+
 app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  // 开机自启时，启动后自动隐藏到托盘
+  // 恢复贴边状态
+  const savedSnap = getSnapState();
+  if (savedSnap) {
+    snapState = { ...savedSnap, isShowing: false };
+    setPosSafely(snapState.hiddenX, snapState.hiddenY);
+    startHoverPoll();
+    mainWindow.webContents.send('snap:changed', { snapped: true, edge: snapState.edge, showing: false });
+  }
+
+  // 启动提醒检查
+  startReminderCheck();
+
+  // 开机自启时隐藏到托盘，否则显示窗口
   if (app.getLoginItemSettings().openAtLogin) {
     mainWindow?.hide();
   } else {
@@ -460,4 +612,10 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  stopReminderCheck();
+  // 退出前保存最终窗口位置
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const bounds = mainWindow.getBounds();
+    setWindowBounds(bounds);
+  }
 });

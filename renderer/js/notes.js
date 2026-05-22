@@ -19,7 +19,7 @@ const notes = (() => {
 
   // 渲染键：涵盖所有影响卡片呈现的字段
   function renderKey(n) {
-    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}`;
+    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}:${n.remindAt || ''}`;
   }
 
   function init() {
@@ -28,6 +28,18 @@ const notes = (() => {
       if (!setsEqual(lastKeys, currentKeys)) render();
     });
     sidebar.onFilterChange(() => render());
+
+    // 监听主进程提醒触发：更新本地状态、高亮卡片、重渲染
+    window.electronAPI.onReminderTriggered((noteId) => {
+      state.onReminderTriggeredFromMain(noteId);
+      // 触发闪烁高亮视觉反馈
+      const card = document.querySelector(`.note-card[data-id="${noteId}"]`);
+      if (card) {
+        card.classList.add('note-card--reminder-flash');
+        setTimeout(() => card.classList.remove('note-card--reminder-flash'), 2000);
+      }
+    });
+
     render();
   }
 
@@ -158,9 +170,15 @@ const notes = (() => {
     row.appendChild(body);
     card.appendChild(row);
 
-    // 底部行：日期 / 时间 / 删除
+    // 底部行：日期 / 时间 / 删除 / 提醒
     const meta = document.createElement('div');
     meta.className = 'note-card__meta';
+
+    const metaLeft = document.createElement('span');
+    metaLeft.className = 'note-card__meta-left';
+
+    const metaRight = document.createElement('span');
+    metaRight.className = 'note-card__meta-right';
 
     if (note.type === 'timeline') {
       const dateInput = document.createElement('input');
@@ -170,7 +188,62 @@ const notes = (() => {
       dateInput.addEventListener('change', async () => {
         await state.updateNote(note.id, { customDate: dateInput.value });
       });
-      meta.appendChild(dateInput);
+      metaLeft.appendChild(dateInput);
+    }
+
+    // ---- 提醒控件（仅 timeline 和 daily 类型） ----
+    if (note.type === 'timeline' || note.type === 'daily') {
+      const reminderEl = document.createElement('span');
+      reminderEl.className = 'note-card__reminder';
+
+      if (note.remindAt) {
+        // 已设置提醒：铃铛图标 + 时间 + 取消按钮
+        const bellIcon = document.createElement('span');
+        bellIcon.className = 'note-card__reminder-bell';
+        bellIcon.textContent = '\u{1F514}';
+
+        const reminderTime = document.createElement('span');
+        reminderTime.className = 'note-card__reminder-time';
+        reminderTime.textContent = formatTime(note.remindAt);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'note-card__reminder-cancel';
+        cancelBtn.textContent = '×';
+        cancelBtn.title = '取消提醒';
+        cancelBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await state.setReminder(note.id, null);
+        });
+
+        reminderEl.appendChild(bellIcon);
+        reminderEl.appendChild(reminderTime);
+        reminderEl.appendChild(cancelBtn);
+      } else {
+        // 未设置提醒：时间选择器 + 设置按钮
+        const datetimeInput = document.createElement('input');
+        datetimeInput.type = 'datetime-local';
+        datetimeInput.className = 'note-card__reminder-input';
+
+        const setBtn = document.createElement('button');
+        setBtn.className = 'note-card__reminder-set';
+        setBtn.textContent = '\u{1F514}';
+        setBtn.title = '设置提醒';
+        setBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (datetimeInput.value) {
+            const [datePart, timePart] = datetimeInput.value.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes] = timePart.split(':').map(Number);
+            const remindAt = new Date(year, month - 1, day, hours, minutes).toISOString();
+            await state.setReminder(note.id, remindAt);
+          }
+        });
+
+        reminderEl.appendChild(datetimeInput);
+        reminderEl.appendChild(setBtn);
+      }
+
+      metaLeft.appendChild(reminderEl);
     }
 
     const time = document.createElement('span');
@@ -185,8 +258,10 @@ const notes = (() => {
       await state.deleteNote(note.id);
     });
 
-    meta.appendChild(time);
-    meta.appendChild(delBtn);
+    metaRight.appendChild(time);
+    metaRight.appendChild(delBtn);
+    meta.appendChild(metaLeft);
+    meta.appendChild(metaRight);
     card.appendChild(meta);
 
     // ---- 折叠/展开交互 ----
@@ -201,7 +276,7 @@ const notes = (() => {
     card.addEventListener('click', (e) => {
       if (!card.classList.contains('note-card--collapsed')) return;
       // 不拦截复选框和删除按钮
-      if (e.target.closest('.note-card__check, .note-card__delete')) return;
+      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder')) return;
       expand();
     });
 
