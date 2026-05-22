@@ -6,8 +6,8 @@ let dataPath;
 
 function getDataPath() {
   if (!dataPath) {
-    const appData = app.getPath('appData');
-    const dir = path.join(appData, 'pianjian');
+    const base = global.__PIANJIAN_DATA_OVERRIDE || app.getPath('appData');
+    const dir = path.join(base, 'pianjian');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }

@@ -52,6 +52,13 @@ function initTitleBar() {
     window.electronAPI.setAutoLaunch(enabled);
   });
 
+  // 同步按钮
+  const syncBtn = document.getElementById('btn-sync');
+  syncBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sync.showDialog();
+  });
+
   // 最小化
   minBtn.addEventListener('click', () => {
     window.electronAPI.minimize();

@@ -32,5 +32,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setReminder: (id, remindAt) => ipcRenderer.invoke('notes:setReminder', id, remindAt),
   onReminderTriggered: (callback) => {
     ipcRenderer.on('reminder:triggered', (_event, noteId) => callback(noteId));
+  },
+
+  // 同步
+  startPairing: () => ipcRenderer.invoke('sync:startPairing'),
+  joinWithCode: (code) => ipcRenderer.invoke('sync:joinWithCode', code),
+  cancelPairing: () => ipcRenderer.invoke('sync:cancelPairing'),
+  disconnect: () => ipcRenderer.invoke('sync:disconnect'),
+  getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
+  onSyncStatusChanged: (callback) => {
+    ipcRenderer.on('sync:statusChanged', (_event, status) => callback(status));
+  },
+  onSyncDataChanged: (callback) => {
+    ipcRenderer.on('sync:dataChanged', () => callback());
   }
 });

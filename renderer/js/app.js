@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   sidebar.init();
   notes.init();
   initTitleBar();
+  sync.init();
+  sync.setupEventHandlers();
 
   // 贴边把手管理
   const handles = document.getElementById('snap-handles');

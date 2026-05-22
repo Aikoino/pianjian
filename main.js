@@ -1,8 +1,13 @@
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
 const path = require('path');
+
+// 测试多实例支持（通过环境变量指定不同数据目录）
+// 该环境变量会覆盖 data-store/config-store/sync-store 中的 appData 路径
+global.__PIANJIAN_DATA_OVERRIDE = process.env.PIANJIAN_DATA_DIR || null;
 const { exec } = require('child_process');
 const { loadNotes, saveNotes } = require('./server/data-store');
 const { getCloseAction, setCloseAction, getWindowBounds, setWindowBounds, getSnapState, setSnapState, clearSnapState, getIsPinned, setIsPinned } = require('./server/config-store');
+const syncManager = require('./server/sync-manager');
 
 let mainWindow = null;
 let isPinned = false;
@@ -555,14 +560,17 @@ ipcMain.handle('notes:add', (_event, note) => {
   const notes = loadNotes();
   notes.push(note);
   saveNotes(notes);
+  syncManager.broadcast({ type: 'note_add', note });
 });
 
 ipcMain.handle('notes:update', (_event, id, changes) => {
   const notes = loadNotes();
   const idx = notes.findIndex(n => n.id === id);
   if (idx !== -1) {
-    Object.assign(notes[idx], changes, { updatedAt: new Date().toISOString() });
+    const updatedAt = new Date().toISOString();
+    Object.assign(notes[idx], changes, { updatedAt });
     saveNotes(notes);
+    syncManager.broadcast({ type: 'note_update', id, changes, updatedAt });
   }
 });
 
@@ -570,18 +578,42 @@ ipcMain.handle('notes:delete', (_event, id) => {
   let notes = loadNotes();
   notes = notes.filter(n => n.id !== id);
   saveNotes(notes);
+  syncManager.broadcast({ type: 'note_delete', id });
 });
 
 ipcMain.handle('notes:setReminder', (_event, id, remindAt) => {
   const notes = loadNotes();
   const note = notes.find(n => n.id === id);
   if (note) {
-    note.remindAt = remindAt || undefined; // 取消提醒时清除（避免 JSON 残留 null）
-    note.updatedAt = new Date().toISOString();
+    note.remindAt = remindAt || undefined;
+    const updatedAt = new Date().toISOString();
+    note.updatedAt = updatedAt;
     saveNotes(notes);
+    syncManager.broadcast({ type: 'note_update', id, changes: { remindAt: note.remindAt }, updatedAt });
     return true;
   }
   return false;
+});
+
+// ---- 同步 ----
+ipcMain.handle('sync:startPairing', () => {
+  return syncManager.startPairing();
+});
+
+ipcMain.handle('sync:joinWithCode', (_event, code) => {
+  syncManager.joinWithCode(code);
+});
+
+ipcMain.handle('sync:cancelPairing', () => {
+  syncManager.cancelPairing();
+});
+
+ipcMain.handle('sync:disconnect', () => {
+  syncManager.disconnect();
+});
+
+ipcMain.handle('sync:getStatus', () => {
+  return syncManager.getStatus();
 });
 
 app.whenReady().then(() => {
@@ -607,6 +639,14 @@ app.whenReady().then(() => {
 
   // 启动提醒检查
   startReminderCheck();
+
+  // 初始化同步管理器
+  syncManager.init(mainWindow);
+  syncManager.onStatusChange((status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sync:statusChanged', status);
+    }
+  });
 
   // 开机自启时隐藏到托盘，否则显示窗口
   if (app.getLoginItemSettings().openAtLogin) {
