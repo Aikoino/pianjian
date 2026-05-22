@@ -42,4 +42,48 @@ function setCloseAction(action) {
   saveConfig(config);
 }
 
-module.exports = { getCloseAction, setCloseAction };
+function getWindowBounds() {
+  const config = loadConfig();
+  return config.windowBounds || null; // { x, y, width, height }
+}
+
+function setWindowBounds(bounds) {
+  const config = loadConfig();
+  config.windowBounds = bounds;
+  saveConfig(config);
+}
+
+function getSnapState() {
+  const config = loadConfig();
+  return config.snapState || null; // { edge, hiddenX, hiddenY, visibleX, visibleY }
+}
+
+function setSnapState(state) {
+  const config = loadConfig();
+  config.snapState = state;
+  saveConfig(config);
+}
+
+function clearSnapState() {
+  const config = loadConfig();
+  delete config.snapState;
+  saveConfig(config);
+}
+
+function getIsPinned() {
+  const config = loadConfig();
+  return config.isPinned || false;
+}
+
+function setIsPinned(pinned) {
+  const config = loadConfig();
+  config.isPinned = pinned;
+  saveConfig(config);
+}
+
+module.exports = {
+  getCloseAction, setCloseAction,
+  getWindowBounds, setWindowBounds,
+  getSnapState, setSnapState, clearSnapState,
+  getIsPinned, setIsPinned
+};

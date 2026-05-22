@@ -46,6 +46,26 @@ const state = (() => {
     notify();
   }
 
+  async function setReminder(id, remindAt) {
+    await window.electronAPI.setReminder(id, remindAt);
+    const note = notes.find(n => n.id === id);
+    if (note) {
+      note.remindAt = remindAt;
+      note.updatedAt = new Date().toISOString();
+    }
+    notify();
+  }
+
+  // 主进程提醒触发后的回调：更新本地状态并触发 UI 重渲染
+  function onReminderTriggeredFromMain(noteId) {
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      note.remindAt = undefined;
+      note.updatedAt = new Date().toISOString();
+    }
+    notify();
+  }
+
   function onChange(callback) {
     listeners.add(callback);
     return () => listeners.delete(callback);
@@ -55,5 +75,5 @@ const state = (() => {
     listeners.forEach(fn => fn(notes));
   }
 
-  return { init, getNotes, addNote, updateNote, deleteNote, onChange };
+  return { init, getNotes, addNote, updateNote, deleteNote, setReminder, onReminderTriggeredFromMain, onChange };
 })();
