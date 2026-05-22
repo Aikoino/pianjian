@@ -100,6 +100,15 @@
     <div class="sync-dialog" id="sync-dialog">
       <div class="sync-dialog__overlay" id="sync-dialog-overlay"></div>
       <div class="sync-dialog__panel">
+        <!-- 选择模式 -->
+        <div class="sync-dialog__landing" id="sync-landing">
+          <h3>局域网同步</h3>
+          <p class="sync-dialog__hint">通过局域网连接两台设备，实时同步便签数据</p>
+          <button class="sync-dialog__btn sync-dialog__btn--primary sync-dialog__btn--wide" id="sync-start-btn">发起配对</button>
+          <button class="sync-dialog__btn sync-dialog__btn--wide" id="sync-join-btn">我有配对码，加入设备</button>
+          <button class="sync-dialog__btn sync-dialog__btn--cancel" style="margin-top:8px">取消</button>
+        </div>
+
         <!-- 发起方：显示配对码 -->
         <div class="sync-dialog__pairing" id="sync-pairing" style="display:none">
           <h3>配对码</h3>

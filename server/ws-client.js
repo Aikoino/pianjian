@@ -67,6 +67,7 @@ function connect(ip, port, code, onMessage, onConnected, onDisconnected, onError
             authed = true;
             clearTimeout(authTimer);
             reconnectAttempts = 0;
+            console.log('[sync] WS 客户端认证成功');
             if (onConnected) onConnected();
           } else if (msg.type === 'auth_fail') {
             clearTimeout(authTimer);

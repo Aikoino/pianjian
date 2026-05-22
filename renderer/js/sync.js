@@ -1,6 +1,7 @@
 const sync = (() => {
   let status = { state: 'idle' };
   let timerInterval = null;
+  let showingLanding = false;
 
   function init() {
     // Listen for status changes from main process
@@ -18,7 +19,8 @@ const sync = (() => {
     // Get initial status
     window.electronAPI.getSyncStatus().then((s) => {
       status = s;
-      render();
+      // Don't close landing panel if user is already interacting
+      if (!showingLanding) render();
     });
   }
 
@@ -39,7 +41,9 @@ const sync = (() => {
     const dialog = document.getElementById('sync-dialog');
     if (!dialog) return;
 
+    // Don't auto-close if showing the landing/mode-choice panel
     if (status.status === 'idle' && !status.timeout && !status.disconnected && !status.error) {
+      if (showingLanding) return;
       dialog.classList.remove('sync-dialog--visible');
       if (timerInterval) {
         clearInterval(timerInterval);
@@ -48,9 +52,11 @@ const sync = (() => {
       return;
     }
 
+    showingLanding = false;
     dialog.classList.add('sync-dialog--visible');
 
     // Show appropriate panel
+    const landingPanel = document.getElementById('sync-landing');
     const pairingPanel = document.getElementById('sync-pairing');
     const joinPanel = document.getElementById('sync-join');
     const connectingPanel = document.getElementById('sync-connecting');
@@ -58,7 +64,7 @@ const sync = (() => {
     const errorPanel = document.getElementById('sync-error');
 
     // Hide all first
-    [pairingPanel, joinPanel, connectingPanel, connectedPanel, errorPanel].forEach(p => {
+    [landingPanel, pairingPanel, joinPanel, connectingPanel, connectedPanel, errorPanel].forEach(p => {
       if (p) p.style.display = 'none';
     });
 
@@ -132,10 +138,17 @@ const sync = (() => {
 
   function showDialog() {
     if (status.status === 'idle') {
-      // Default to pairing (initiator) mode
-      switchToPairing();
+      // Show mode-selection landing panel
+      showingLanding = true;
+      const dialog = document.getElementById('sync-dialog');
+      dialog.classList.add('sync-dialog--visible');
+      document.getElementById('sync-landing').style.display = 'block';
+      document.getElementById('sync-pairing').style.display = 'none';
+      document.getElementById('sync-join').style.display = 'none';
+      document.getElementById('sync-connecting').style.display = 'none';
+      document.getElementById('sync-connected').style.display = 'none';
+      document.getElementById('sync-error').style.display = 'none';
     } else {
-      // If already in a state, just show the current status
       render();
     }
   }
@@ -146,7 +159,10 @@ const sync = (() => {
     status.disconnected = false;
     status.error = null;
 
+    showingLanding = false;
+
     // Hide all panels
+    document.getElementById('sync-landing').style.display = 'none';
     document.getElementById('sync-pairing').style.display = 'block';
     document.getElementById('sync-join').style.display = 'none';
     document.getElementById('sync-connected').style.display = 'none';
@@ -155,7 +171,6 @@ const sync = (() => {
 
     window.electronAPI.startPairing().then((result) => {
       if (!result) {
-        // Already in a sync state
         render();
       }
     });
@@ -167,7 +182,10 @@ const sync = (() => {
     status.disconnected = false;
     status.error = null;
 
+    showingLanding = false;
+
     // Hide all panels
+    document.getElementById('sync-landing').style.display = 'none';
     document.getElementById('sync-pairing').style.display = 'none';
     document.getElementById('sync-join').style.display = 'block';
     document.getElementById('sync-connected').style.display = 'none';
@@ -182,6 +200,7 @@ const sync = (() => {
   }
 
   function hideDialog() {
+    showingLanding = false;
     if (status.status === 'pairing' || status.status === 'discovering') {
       window.electronAPI.cancelPairing();
     }
@@ -210,6 +229,10 @@ const sync = (() => {
   // ---- Setup event handlers (called from init) ----
 
   function setupEventHandlers() {
+    // Landing panel: choose mode
+    document.getElementById('sync-start-btn')?.addEventListener('click', switchToPairing);
+    document.getElementById('sync-join-btn')?.addEventListener('click', switchToJoin);
+
     // Switch between pairing and join
     document.getElementById('sync-switch-join')?.addEventListener('click', switchToJoin);
     document.getElementById('sync-switch-start')?.addEventListener('click', switchToPairing);

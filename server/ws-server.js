@@ -24,6 +24,7 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
       httpServer.once('listening', () => resolve());
       httpServer.listen(48484);
     });
+    console.log(`[sync] WS 服务端已绑定到端口 48484`);
   } catch (err) {
     // 首选端口被占用（EADDRINUSE），尝试系统分配端口
     if (err.code !== 'EADDRINUSE') {
@@ -36,6 +37,7 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
         httpServer.once('listening', () => resolve());
         httpServer.listen(0);
       });
+      console.log(`[sync] WS 服务端已绑定到随机端口 ${httpServer.address().port}`);
     } catch (err2) {
       if (onError) onError('无法绑定端口: ' + err2.message);
       return { stop: () => {}, port: 0, broadcast: () => {} };
@@ -49,10 +51,12 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
 
   wss.on('connection', (ws) => {
     if (client) {
+      console.log('[sync] WS 拒绝: 已有配对连接');
       ws.close(4001, 'already_paired');
       return;
     }
 
+    console.log('[sync] WS 新连接');
     client = ws;
     let authed = false;
 

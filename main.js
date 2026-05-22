@@ -4,6 +4,11 @@ const path = require('path');
 // 测试多实例支持（通过环境变量指定不同数据目录）
 // 该环境变量会覆盖 data-store/config-store/sync-store 中的 appData 路径
 global.__PIANJIAN_DATA_OVERRIDE = process.env.PIANJIAN_DATA_DIR || null;
+if (global.__PIANJIAN_DATA_OVERRIDE) {
+  console.log('[sync] 数据目录覆盖:', global.__PIANJIAN_DATA_OVERRIDE);
+} else {
+  console.log('[sync] 使用默认 appData 目录:', require('electron').app.getPath('appData'));
+}
 const { exec } = require('child_process');
 const { loadNotes, saveNotes } = require('./server/data-store');
 const { getCloseAction, setCloseAction, getWindowBounds, setWindowBounds, getSnapState, setSnapState, clearSnapState, getIsPinned, setIsPinned } = require('./server/config-store');

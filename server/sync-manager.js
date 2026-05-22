@@ -39,7 +39,11 @@ function getStatus() {
 }
 
 function setStatus(s) {
+  const prev = state.status;
   state = { ...state, ...s };
+  if (prev !== state.status) {
+    console.log(`[sync] 状态: ${prev} → ${state.status}${s.error ? ' ('+s.error+')' : ''}${s.timeout ? ' (超时)' : ''}${s.disconnected ? ' (断开)' : ''}`);
+  }
   notifyStatus();
 }
 
@@ -135,6 +139,12 @@ async function startPairing() {
 // ---- Pairing: joiner ----
 
 function joinWithCode(code) {
+  // If currently in pairing mode, stop broadcast/server first
+  if (state.status === 'pairing') {
+    stopSync();
+    state = { status: 'idle' };
+  }
+
   if (state.status !== 'idle') return;
 
   setStatus({ status: 'discovering' });

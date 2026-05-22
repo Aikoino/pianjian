@@ -100,6 +100,40 @@
   border-color: var(--color-accent);
 }
 
+/* 选择模式面板 */
+.sync-dialog__landing {
+  display: block;
+}
+
+.sync-dialog__landing .sync-dialog__hint {
+  margin-bottom: 20px;
+}
+
+.sync-dialog__btn--wide {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: filter 0.15s;
+}
+
+.sync-dialog__btn--wide:hover {
+  filter: brightness(1.05);
+}
+
+.sync-dialog__btn--primary.sync-dialog__btn--wide {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
 /* 按钮 */
 .sync-dialog__btn {
   display: inline-block;
