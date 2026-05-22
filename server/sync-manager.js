@@ -49,7 +49,7 @@ function setStatus(s) {
 
 // ---- Merge logic ----
 
-function mergeNotes(localNotes, remoteNotes) {
+function mergeNotes(localNotes, remoteNotes, remoteRole) {
   const merged = new Map();
   for (const n of localNotes) merged.set(n.id, n);
   for (const rn of remoteNotes) {
@@ -59,6 +59,11 @@ function mergeNotes(localNotes, remoteNotes) {
     } else {
       const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
       const remoteTime = new Date(rn.updatedAt || rn.createdAt || 0).getTime();
+      const diff = Math.abs(existingTime - remoteTime);
+      // 冲突：2秒内修改，发起端(authority)优先
+      if (diff < 2000 && remoteRole === 'follower') {
+        continue;
+      }
       if (remoteTime > existingTime) {
         merged.set(rn.id, rn);
       }
@@ -185,9 +190,9 @@ function joinWithCode(code) {
             pairedAt: new Date().toISOString()
           });
           setStatus({ status: 'connected', peerName: peerInfo.deviceName });
-          // Full sync: send all local notes
+          // Full sync: send all local notes (joiner is follower)
           const notes = loadNotes();
-          broadcast({ type: 'sync_full', notes, deviceId: getDeviceId() });
+          broadcast({ type: 'sync_full', notes, deviceId: getDeviceId(), role: 'follower' });
         },
         () => {
           // Disconnected
@@ -252,11 +257,11 @@ function handleRemoteMessage(msg) {
     switch (msg.type) {
       case 'sync_full': {
         const local = loadNotes();
-        const merged = mergeNotes(local, msg.notes);
+        const merged = mergeNotes(local, msg.notes, msg.role);
         saveNotes(merged);
         // If we haven't sent our notes yet (as server), send them
         if (server && state.status === 'connected') {
-          broadcast({ type: 'sync_full', notes: local, deviceId: getDeviceId() });
+          broadcast({ type: 'sync_full', notes: local, deviceId: getDeviceId(), role: 'authority' });
         }
         break;
       }
