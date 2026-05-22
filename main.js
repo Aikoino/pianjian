@@ -334,21 +334,22 @@ ipcMain.on('window:minimize', () => {
   mainWindow?.minimize();
 });
 
-ipcMain.on('window:close', () => {
+ipcMain.on('window:close', async () => {
   if (!mainWindow) return;
   const action = getCloseAction();
   if (action === 'tray') { mainWindow.hide(); return; }
   if (action === 'quit') { isQuitting = true; app.quit(); return; }
 
   // 首次关闭：弹出选择对话框
-  const result = dialog.showMessageBoxSync(mainWindow, {
+  // 注意：Electron 22 中 showMessageBoxSync 返回整数，需要用异步版获取 checkboxChecked
+  const result = await dialog.showMessageBox(mainWindow, {
     type: 'question',
     title: '片笺',
     message: '关闭窗口',
     detail: '请选择关闭后的行为：',
     buttons: ['最小化到系统托盘', '退出程序'],
     defaultId: 0,
-    cancelId: 1,
+    cancelId: 0,
     checkboxLabel: '不再询问，记住我的选择',
     checkboxChecked: false
   });
