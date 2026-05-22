@@ -34,8 +34,8 @@ function checkReminders() {
 
   notes.forEach(note => {
     if (!note.remindAt) return;
-    // 仅 timeline 和 daily 类型触发提醒
-    if (note.type !== 'timeline' && note.type !== 'daily') return;
+    // 仅 daily、weekly 和 timeline 类型触发提醒
+    if (note.type !== 'daily' && note.type !== 'weekly' && note.type !== 'timeline') return;
     try {
       const remindTime = new Date(note.remindAt);
       if (remindTime <= now) {
@@ -262,6 +262,8 @@ function scheduleSaveBounds() {
   if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
   saveBoundsTimer = setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
+    // 贴边状态下不保存隐藏位置，否则下次启动窗口会出现在屏幕外
+    if (snapState) return;
     const bounds = mainWindow.getBounds();
     setWindowBounds(bounds);
   }, 300);
@@ -586,13 +588,21 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  // 恢复贴边状态
+  // 恢复贴边状态（校验坐标在当前屏幕内，否则忽略）
   const savedSnap = getSnapState();
   if (savedSnap) {
-    snapState = { ...savedSnap, isShowing: false };
-    setPosSafely(snapState.hiddenX, snapState.hiddenY);
-    startHoverPoll();
-    mainWindow.webContents.send('snap:changed', { snapped: true, edge: snapState.edge, showing: false });
+    const display = screen.getDisplayMatching({ x: savedSnap.visibleX, y: savedSnap.visibleY, width: 100, height: 100 });
+    const { x: wx, y: wy, width: ww, height: wh } = display.workArea;
+    const validX = savedSnap.visibleX >= wx && savedSnap.visibleX < wx + ww;
+    const validY = savedSnap.visibleY >= wy && savedSnap.visibleY < wy + wh;
+    if (validX && validY) {
+      snapState = { ...savedSnap, isShowing: false };
+      setPosSafely(snapState.hiddenX, snapState.hiddenY);
+      startHoverPoll();
+      mainWindow.webContents.send('snap:changed', { snapped: true, edge: snapState.edge, showing: false });
+    } else {
+      clearSnapState();
+    }
   }
 
   // 启动提醒检查
@@ -601,6 +611,11 @@ app.whenReady().then(() => {
   // 开机自启时隐藏到托盘，否则显示窗口
   if (app.getLoginItemSettings().openAtLogin) {
     mainWindow?.hide();
+  } else if (snapState) {
+    // 非开机自启且恢复贴边：窗口显示在可见位置，而非隐藏位置
+    snapState.isShowing = true;
+    setPosSafely(snapState.visibleX, snapState.visibleY);
+    mainWindow.webContents.send('snap:changed', { snapped: true, edge: snapState.edge, showing: true });
   } else {
     mainWindow?.show();
   }
@@ -613,8 +628,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   stopReminderCheck();
-  // 退出前保存最终窗口位置
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  // 退出前保存最终窗口位置（贴边状态不保存隐藏坐标）
+  if (mainWindow && !mainWindow.isDestroyed() && !snapState) {
     const bounds = mainWindow.getBounds();
     setWindowBounds(bounds);
   }

@@ -11,7 +11,7 @@ const state = (() => {
     return notes;
   }
 
-  async function addNote(type) {
+  async function addNote(type, remindAt) {
     const note = {
       id: uuid(),
       type,
@@ -23,6 +23,9 @@ const state = (() => {
     };
     if (type === 'timeline') {
       note.customDate = new Date().toISOString().slice(0, 10);
+    }
+    if (remindAt) {
+      note.remindAt = remindAt;
     }
     await window.electronAPI.addNote(note);
     notes.push(note);

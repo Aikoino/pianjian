@@ -16,22 +16,18 @@
     <!-- 贴边书签把手 -->
     <div class="snap-handles" id="snap-handles">
       <div class="snap-handle snap-handle--daily" data-type="daily">
-        <span class="snap-handle__dot snap-handle__dot--daily"></span>
         <span class="snap-handle__label">今日</span>
         <span class="snap-handle__count snap-handle__count--daily"></span>
       </div>
       <div class="snap-handle snap-handle--weekly" data-type="weekly">
-        <span class="snap-handle__dot snap-handle__dot--weekly"></span>
         <span class="snap-handle__label">周</span>
         <span class="snap-handle__count snap-handle__count--weekly"></span>
       </div>
       <div class="snap-handle snap-handle--normal" data-type="normal">
-        <span class="snap-handle__dot snap-handle__dot--normal"></span>
         <span class="snap-handle__label">便签</span>
         <span class="snap-handle__count snap-handle__count--normal"></span>
       </div>
       <div class="snap-handle snap-handle--timeline" data-type="timeline">
-        <span class="snap-handle__dot snap-handle__dot--timeline"></span>
         <span class="snap-handle__label">时间轴</span>
         <span class="snap-handle__count snap-handle__count--timeline"></span>
       </div>
@@ -74,18 +70,22 @@
 
       <!-- 添加类型选择弹窗 -->
       <div class="add-popup" id="add-popup">
-        <button class="add-popup__item" data-type="daily">
-          <span class="add-popup__dot add-popup__dot--daily"></span>今日待办
-        </button>
-        <button class="add-popup__item" data-type="weekly">
-          <span class="add-popup__dot add-popup__dot--weekly"></span>周待办
-        </button>
-        <button class="add-popup__item" data-type="normal">
-          <span class="add-popup__dot add-popup__dot--normal"></span>普通便签
-        </button>
-        <button class="add-popup__item" data-type="timeline">
-          <span class="add-popup__dot add-popup__dot--timeline"></span>时间轴
-        </button>
+        <div class="add-popup__item" data-type="daily">
+          <span class="add-popup__dot add-popup__dot--daily"></span>
+          <span class="add-popup__label">今日待办</span>
+        </div>
+        <div class="add-popup__item" data-type="weekly">
+          <span class="add-popup__dot add-popup__dot--weekly"></span>
+          <span class="add-popup__label">周待办</span>
+        </div>
+        <div class="add-popup__item" data-type="normal">
+          <span class="add-popup__dot add-popup__dot--normal"></span>
+          <span class="add-popup__label">普通便签</span>
+        </div>
+        <div class="add-popup__item" data-type="timeline">
+          <span class="add-popup__dot add-popup__dot--timeline"></span>
+          <span class="add-popup__label">时间轴</span>
+        </div>
       </div>
     </header>
 

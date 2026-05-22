@@ -115,17 +115,22 @@
 .add-popup__item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.12s;
+  white-space: nowrap;
 }
 
 .add-popup__item:hover {
   background: rgba(0,0,0,0.04);
+}
+
+.add-popup__label {
+  flex: 1;
 }
 
 .add-popup__dot {
@@ -139,3 +144,21 @@
 .add-popup__dot--weekly  { background: var(--color-weekly-bg); }
 .add-popup__dot--normal  { background: var(--color-normal-bg); }
 .add-popup__dot--timeline { background: var(--color-timeline-bg); }
+
+.add-popup__time {
+  width: 85px;
+  font-size: 11px;
+  border: none;
+  outline: none;
+  background: rgba(0,0,0,0.04);
+  border-radius: 4px;
+  padding: 2px 4px;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.add-popup__time::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.5;
+}

@@ -43,6 +43,15 @@ const notes = (() => {
     render();
   }
 
+  // 全局点击关闭提醒弹窗
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.note-card__reminder-popup.visible').forEach(popup => {
+      if (!popup.contains(e.target) && !e.target.closest('.note-card__reminder-bell')) {
+        popup.classList.remove('visible');
+      }
+    });
+  });
+
   function setSearch(query) {
     searchQuery = query.trim().toLowerCase();
     render();
@@ -191,74 +200,121 @@ const notes = (() => {
       metaLeft.appendChild(dateInput);
     }
 
-    // ---- 提醒控件（仅 timeline 和 daily 类型） ----
-    if (note.type === 'timeline' || note.type === 'daily') {
+    // ---- 提醒控件（daily、weekly、timeline 类型）：铃铛按钮 → 弹出日期时间面板 ----
+    if (note.type === 'daily' || note.type === 'weekly' || note.type === 'timeline') {
       const reminderEl = document.createElement('span');
       reminderEl.className = 'note-card__reminder';
 
+      // 铃铛按钮
+      const bellBtn = document.createElement('button');
+      bellBtn.className = 'note-card__reminder-bell';
+      bellBtn.textContent = '\u{1F514}';
       if (note.remindAt) {
-        // 已设置提醒：铃铛图标 + 时间 + 取消按钮
-        const bellIcon = document.createElement('span');
-        bellIcon.className = 'note-card__reminder-bell';
-        bellIcon.textContent = '\u{1F514}';
-
-        const reminderTime = document.createElement('span');
-        reminderTime.className = 'note-card__reminder-time';
-        reminderTime.textContent = formatTime(note.remindAt);
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'note-card__reminder-cancel';
-        cancelBtn.textContent = '×';
-        cancelBtn.title = '取消提醒';
-        cancelBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await state.setReminder(note.id, null);
-        });
-
-        reminderEl.appendChild(bellIcon);
-        reminderEl.appendChild(reminderTime);
-        reminderEl.appendChild(cancelBtn);
+        bellBtn.classList.add('active');
+        const d = new Date(note.remindAt);
+        const pad = n => String(n).padStart(2, '0');
+        bellBtn.title = `提醒: ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       } else {
-        // 未设置提醒：时间选择器 + 设置按钮
-        const datetimeInput = document.createElement('input');
-        datetimeInput.type = 'datetime-local';
-        datetimeInput.className = 'note-card__reminder-input';
-
-        const setBtn = document.createElement('button');
-        setBtn.className = 'note-card__reminder-set';
-        setBtn.textContent = '\u{1F514}';
-        setBtn.title = '设置提醒';
-        setBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          if (datetimeInput.value) {
-            const [datePart, timePart] = datetimeInput.value.split('T');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hours, minutes] = timePart.split(':').map(Number);
-            const remindAt = new Date(year, month - 1, day, hours, minutes).toISOString();
-            await state.setReminder(note.id, remindAt);
-          }
-        });
-
-        reminderEl.appendChild(datetimeInput);
-        reminderEl.appendChild(setBtn);
+        bellBtn.title = '设置提醒';
       }
 
+      // 弹出面板
+      const popup = document.createElement('div');
+      popup.className = 'note-card__reminder-popup';
+
+      const dateInput = document.createElement('input');
+      dateInput.type = 'date';
+      dateInput.className = 'note-card__reminder-date-input';
+      if (note.remindAt) {
+        dateInput.value = new Date(note.remindAt).toISOString().slice(0, 10);
+      } else if (note.type === 'timeline' && note.customDate) {
+        dateInput.value = note.customDate;
+      } else {
+        dateInput.value = new Date().toISOString().slice(0, 10);
+      }
+
+      const timeInput = document.createElement('input');
+      timeInput.type = 'time';
+      timeInput.className = 'note-card__reminder-time-input';
+      if (note.remindAt) {
+        const d = new Date(note.remindAt);
+        timeInput.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+
+      // 操作按钮行
+      const popupRow = document.createElement('div');
+      popupRow.className = 'note-card__reminder-popup-row';
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'note-card__reminder-confirm';
+      confirmBtn.textContent = '\u{2714} \u{786E}\u{5B9A}';
+      confirmBtn.title = note.remindAt ? '更新提醒' : '设置提醒';
+      confirmBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (dateInput.value && timeInput.value) {
+          const [y, m, d] = dateInput.value.split('-').map(Number);
+          const [hours, minutes] = timeInput.value.split(':').map(Number);
+          const remindAt = new Date(y, m - 1, d, hours, minutes).toISOString();
+          await state.setReminder(note.id, remindAt);
+          popup.classList.remove('visible');
+        }
+      });
+      popupRow.appendChild(confirmBtn);
+
+      // 已设置提醒时显示"取消提醒"按钮
+      if (note.remindAt) {
+        const cancelReminderBtn = document.createElement('button');
+        cancelReminderBtn.className = 'note-card__reminder-popup-cancel';
+        cancelReminderBtn.textContent = '\u{2716} \u{53D6}\u{6D88}\u{63D0}\u{9192}';
+        cancelReminderBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await state.setReminder(note.id, null);
+          popup.classList.remove('visible');
+        });
+        popupRow.appendChild(cancelReminderBtn);
+      }
+
+      popup.appendChild(dateInput);
+      popup.appendChild(timeInput);
+      popup.appendChild(popupRow);
+
+      // 铃铛点击切换弹窗
+      bellBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 关闭其他所有弹窗
+        document.querySelectorAll('.note-card__reminder-popup.visible').forEach(p => {
+          if (p !== popup) p.classList.remove('visible');
+        });
+        // 智能定位：下方优先，上方不够则向下
+        const rect = bellBtn.getBoundingClientRect();
+        const spaceAbove = rect.top;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        popup.style.right = (window.innerWidth - rect.right) + 'px';
+        popup.style.top = 'auto';
+        popup.style.bottom = 'auto';
+        if (spaceBelow >= 140) {
+          popup.style.top = (rect.bottom + 4) + 'px';
+        } else if (spaceAbove >= 140) {
+          popup.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+          popup.style.top = (rect.bottom + 4) + 'px';
+        }
+        popup.classList.toggle('visible');
+      });
+
+      reminderEl.appendChild(bellBtn);
+      reminderEl.appendChild(popup);
       metaLeft.appendChild(reminderEl);
     }
-
-    const time = document.createElement('span');
-    time.className = 'note-card__time';
-    time.textContent = formatTime(note.createdAt);
 
     const delBtn = document.createElement('button');
     delBtn.className = 'note-card__delete';
     delBtn.innerHTML = '&times;';
-    delBtn.title = '删除';
+    delBtn.title = `删除 · ${formatTime(note.createdAt)}`;
     delBtn.addEventListener('click', async () => {
       await state.deleteNote(note.id);
     });
 
-    metaRight.appendChild(time);
     metaRight.appendChild(delBtn);
     meta.appendChild(metaLeft);
     meta.appendChild(metaRight);
