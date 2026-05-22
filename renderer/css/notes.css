@@ -148,6 +148,66 @@
   opacity: 0.6;
 }
 
+/* ---- 折叠摘要 ---- */
+.note-card__summary {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.note-card--collapsed .note-card__summary {
+  display: flex;
+}
+
+.note-card--collapsed .note-card__row,
+.note-card--collapsed .note-card__meta {
+  display: none;
+}
+
+.note-card--collapsed {
+  cursor: pointer;
+}
+
+.note-card__summary-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.note-card__summary-expand {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-accent);
+  background: rgba(0,0,0,0.06);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.note-card__summary-expand:hover {
+  background: rgba(0,0,0,0.12);
+}
+
+.note-card--completed.note-card--collapsed .note-card__summary-text {
+  text-decoration: line-through;
+  color: #999;
+  font-weight: 400;
+}
+
+.note-card--expired.note-card--collapsed .note-card__summary-text {
+  color: #999;
+  font-weight: 400;
+}
+
 /* ---- 空状态 ---- */
 .notes-empty {
   flex: 1;

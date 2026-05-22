@@ -17,6 +17,7 @@ const state = (() => {
       type,
       content: '',
       completed: false,
+      collapsed: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

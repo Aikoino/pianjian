@@ -7,6 +7,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 贴边把手管理
   const handles = document.getElementById('snap-handles');
 
+  // 把手点击切换分类
+  handles.querySelectorAll('.snap-handle').forEach(handle => {
+    handle.addEventListener('click', () => {
+      const type = handle.dataset.type;
+      if (type) sidebar.setActive(type);
+    });
+  });
+
   window.electronAPI.onSnapChanged(({ snapped, edge, showing }) => {
     if (snapped && !showing) {
       // 贴边隐藏中：只显示书签把手，隐藏主界面

@@ -1,4 +1,13 @@
-/* 贴边时隐藏正常界面 */
+/* 贴边时隐藏正常界面 + 背景透明 */
+/* html 始终透明（正常模式 body 背景会覆盖它） */
+html {
+  background: transparent;
+}
+
+body.is-snapped {
+  background: transparent;
+}
+
 body.is-snapped .title-bar,
 body.is-snapped .content-area {
   display: none;
@@ -10,79 +19,94 @@ body.is-snapped .content-area {
   transform: translateY(-50%);
   display: none;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
   z-index: 200;
   -webkit-app-region: drag;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 
 .snap-handles--visible {
   display: flex;
 }
 
-/* 右贴边：把手在窗口左侧边缘 */
+/* 右贴边（窗口在屏幕右侧，把手在窗口左边缘露出） */
 .snap-handles--left {
   left: 0;
 }
 
-/* 左贴边：把手在窗口右侧边缘 */
+/* 左贴边（窗口在屏幕左侧，把手在窗口右边缘露出） */
 .snap-handles--right {
   right: 0;
 }
 
 .snap-handle {
-  width: 22px;
-  height: 42px;
+  width: 28px;
+  height: 54px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  cursor: default;
+  gap: 3px;
+  cursor: pointer;
   position: relative;
-  transition: width 0.15s;
+  transition: width 0.18s, filter 0.15s, box-shadow 0.18s;
+  -webkit-app-region: no-drag;
+  /* 凸出阴影 */
+  box-shadow: 2px 0 8px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.12);
 }
 
-/* 书签造型：圆角 + 底部收尾 */
+.snap-handle:hover {
+  width: 34px;
+  filter: brightness(1.1);
+  box-shadow: 3px 0 12px rgba(0,0,0,0.22), 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.snap-handle:active {
+  filter: brightness(0.9);
+}
+
+/* 左侧把手（右贴边时）：左圆角，凸出方向朝右 */
 .snap-handles--left .snap-handle {
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 10px 10px 0;
 }
 
+/* 右侧把手（左贴边时）：右圆角，凸出方向朝左 */
 .snap-handles--right .snap-handle {
-  border-radius: 6px 0 0 6px;
+  border-radius: 10px 0 0 10px;
 }
 
-/* 书签尾部小三角 */
+/* 书签尾部小三角装饰 */
 .snap-handle::after {
   content: '';
   position: absolute;
-  bottom: 3px;
+  bottom: 8px;
   width: 0;
   height: 0;
 }
 
 .snap-handles--left .snap-handle::after {
-  right: 2px;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 4px solid rgba(255,255,255,0.5);
+  right: 4px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 5px solid rgba(255,255,255,0.4);
 }
 
 .snap-handles--right .snap-handle::after {
-  left: 2px;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-right: 4px solid rgba(255,255,255,0.5);
+  left: 4px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 5px solid rgba(255,255,255,0.4);
 }
 
+/* 各类型颜色 — 深色底使白色文字清晰 */
 .snap-handle--daily    { background: #c62828; }
 .snap-handle--weekly   { background: #e65100; }
 .snap-handle--normal   { background: #2e7d32; }
 .snap-handle--timeline { background: #ad1457; }
 
 .snap-handle__dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -93,17 +117,20 @@ body.is-snapped .content-area {
 .snap-handle__dot--timeline { background: #f48fb1; }
 
 .snap-handle__label {
-  font-size: 10px;
-  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  color: rgba(255,255,255,0.93);
   writing-mode: vertical-rl;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
   line-height: 1;
+  font-weight: 500;
 }
 
 .snap-handle__count {
-  font-size: 8px;
+  font-size: 9px;
   color: rgba(255,255,255,0.7);
   line-height: 1;
+  min-width: 14px;
+  text-align: center;
 }
 
 .snap-handle__count:empty {

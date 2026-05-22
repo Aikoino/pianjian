@@ -19,7 +19,7 @@ const notes = (() => {
 
   // 渲染键：涵盖所有影响卡片呈现的字段
   function renderKey(n) {
-    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}`;
+    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}`;
   }
 
   function init() {
@@ -60,17 +60,74 @@ const notes = (() => {
     });
   }
 
+  function placeCaretAtEnd(el) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  // 检测多行：兼容 textContent 的 \n 和 contentEditable 产生的 div/br 标签
+  function hasMultipleLines(source) {
+    if (typeof source === 'string') {
+      if (source.includes('\n')) return true;
+      if (/<(div|br|p)[^>]*>/i.test(source)) return true;
+      return false;
+    }
+    // DOM 元素：同时检查 textContent 和 innerHTML
+    if (source.textContent && source.textContent.includes('\n')) return true;
+    if (/<(div|br|p)[^>]*>/i.test(source.innerHTML || '')) return true;
+    return false;
+  }
+
   function createCard(note) {
     const card = document.createElement('div');
     const effectiveType = getEffectiveType(note);
     const expired = isExpired(note);
+    // 折叠判断：显式 collapsed 字段优先，旧便签（undefined）按多行自动折叠
+    const shouldCollapse = note.collapsed === true ||
+      (note.collapsed === undefined && hasMultipleLines(note.content));
+
     card.className = [
       'note-card',
       `note-card--${effectiveType}`,
       note.completed ? 'note-card--completed' : '',
-      !note.completed && expired ? 'note-card--expired' : ''
+      !note.completed && expired ? 'note-card--expired' : '',
+      shouldCollapse ? 'note-card--collapsed' : ''
     ].filter(Boolean).join(' ');
     card.dataset.id = note.id;
+
+    // ---- 折叠摘要 ----
+    const summary = document.createElement('div');
+    summary.className = 'note-card__summary';
+
+    // 摘要中的复选框（折叠时可勾选）
+    const summaryCheck = document.createElement('div');
+    summaryCheck.className = 'note-card__check note-card__check--summary';
+    summaryCheck.title = note.completed ? '标记为未完成' : '标记为已完成';
+    summaryCheck.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await state.updateNote(note.id, { completed: !note.completed });
+    });
+
+    const summaryText = document.createElement('span');
+    summaryText.className = 'note-card__summary-text';
+
+    const expandBtn = document.createElement('span');
+    expandBtn.className = 'note-card__summary-expand';
+    expandBtn.textContent = '展开';
+
+    summary.appendChild(summaryCheck);
+    summary.appendChild(summaryText);
+    summary.appendChild(expandBtn);
+
+    function updateSummary() {
+      const firstLine = (note.content || '').split('\n')[0].trim();
+      summaryText.textContent = firstLine || '(无标题)';
+    }
+    updateSummary();
 
     // 顶部行：复选框 + 正文
     const row = document.createElement('div');
@@ -91,7 +148,10 @@ const notes = (() => {
     body.textContent = note.content;
 
     const saveDebounced = debounce(async () => {
-      await state.updateNote(note.id, { content: body.textContent });
+      const content = body.textContent;
+      // 更新 note.content 以便 renderKey 使用
+      note.content = content;
+      await state.updateNote(note.id, { content });
     }, 300);
 
     body.addEventListener('input', saveDebounced);
@@ -128,6 +188,51 @@ const notes = (() => {
     meta.appendChild(time);
     meta.appendChild(delBtn);
     card.appendChild(meta);
+
+    // ---- 折叠/展开交互 ----
+
+    // 摘要点击 → 展开
+    summary.addEventListener('click', (e) => {
+      e.stopPropagation();
+      expand();
+    });
+
+    // 折叠状态下点击卡片任何位置 → 展开
+    card.addEventListener('click', (e) => {
+      if (!card.classList.contains('note-card--collapsed')) return;
+      // 不拦截复选框和删除按钮
+      if (e.target.closest('.note-card__check, .note-card__delete')) return;
+      expand();
+    });
+
+    function expand() {
+      card.classList.remove('note-card--collapsed');
+      note.collapsed = false;
+      body.focus();
+      placeCaretAtEnd(body);
+    }
+
+    // 正文失焦 → 自动折叠（blur + focusout 双保险）
+    function tryCollapse() {
+      if (!hasMultipleLines(body)) return;
+      if (!card.classList.contains('note-card--collapsed')) {
+        note.collapsed = true;
+        updateSummaryFromBody();
+        card.classList.add('note-card--collapsed');
+      }
+    }
+    body.addEventListener('focusout', (e) => {
+      // 焦点离开当前 card 时才折叠（避免点击 checkbox/删除 等内部元素误触发）
+      if (!card.contains(e.relatedTarget)) tryCollapse();
+    });
+
+    function updateSummaryFromBody() {
+      const firstLine = (body.textContent || '').split('\n')[0].trim();
+      summaryText.textContent = firstLine || '(无标题)';
+    }
+
+    // 摘要插入到卡片顶部
+    card.insertBefore(summary, card.firstChild);
 
     if (!note.content) {
       setTimeout(() => body.focus(), 50);
