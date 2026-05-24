@@ -1,6 +1,6 @@
 const { loadNotes, saveNotes } = require('./data-store');
 const { getDeviceId, getDeviceName, setPairedDevice, clearPairedDevice } = require('./sync-store');
-const { startBroadcast, stopBroadcast, startListening, stopListening } = require('./discovery');
+const { startBroadcast, stopBroadcast, startListening, stopListening, getLocalIP } = require('./discovery');
 const { createServer } = require('./ws-server');
 const { connect } = require('./ws-client');
 
@@ -98,8 +98,9 @@ async function startPairing() {
   const expiresAt = Date.now() + PAIRING_TIMEOUT;
   const deviceName = getDeviceName();
   const deviceId = getDeviceId();
+  const localIP = getLocalIP();
 
-  setStatus({ status: 'pairing', code, expiresAt, deviceName });
+  setStatus({ status: 'pairing', code, expiresAt, deviceName, serverIP: localIP });
 
   // Start WS server
   server = await createServer(
@@ -126,6 +127,9 @@ async function startPairing() {
       setStatus({ status: 'error', error: err });
     }
   );
+
+  // 更新状态加入端口号
+  setStatus({ serverPort: server.port });
 
   // Start UDP broadcast
   startBroadcast(code, server.port, deviceName);
@@ -259,9 +263,9 @@ function handleRemoteMessage(msg) {
         const local = loadNotes();
         const merged = mergeNotes(local, msg.notes, msg.role);
         saveNotes(merged);
-        // If we haven't sent our notes yet (as server), send them
+        // 将合并后的完整数据发给从属端（标记为首轮同步）
         if (server && state.status === 'connected') {
-          broadcast({ type: 'sync_full', notes: local, deviceId: getDeviceId(), role: 'authority' });
+          broadcast({ type: 'sync_full', notes: merged, deviceId: getDeviceId(), role: 'authority', initialSync: true });
         }
         break;
       }

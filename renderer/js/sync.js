@@ -1,120 +1,96 @@
 const sync = (() => {
   let status = { state: 'idle' };
   let timerInterval = null;
-  let showingLanding = false;
+  let dropdownVisible = false;
 
   function init() {
-    // Listen for status changes from main process
     window.electronAPI.onSyncStatusChanged((newStatus) => {
       status = newStatus;
       render();
     });
 
-    // Listen for remote data changes → refresh notes
     window.electronAPI.onSyncDataChanged(() => {
-      // Re-init state from storage
       state.init();
     });
 
-    // Get initial status
     window.electronAPI.getSyncStatus().then((s) => {
       status = s;
-      // Don't close landing panel if user is already interacting
-      if (!showingLanding) render();
+      render();
     });
   }
 
   function render() {
     const btn = document.getElementById('btn-sync');
-    if (!btn) return;
+    const dropdown = document.getElementById('sync-dropdown');
+    if (!btn || !dropdown) return;
 
-    // Update button state
+    // 按钮状态
+    btn.classList.remove('connected', 'spinning');
     if (status.status === 'connected') {
       btn.classList.add('connected');
       btn.title = `已同步 (${status.peerName || '另一台设备'})`;
+    } else if (status.status === 'pairing' || status.status === 'discovering' || status.status === 'connecting') {
+      btn.classList.add('spinning');
+      btn.title = '同步中...';
     } else {
-      btn.classList.remove('connected');
       btn.title = '同步';
     }
 
-    // Show/hide dialog based on state
-    const dialog = document.getElementById('sync-dialog');
-    if (!dialog) return;
-
-    // Don't auto-close if showing the landing/mode-choice panel
-    if (status.status === 'idle' && !status.timeout && !status.disconnected && !status.error) {
-      if (showingLanding) return;
-      dialog.classList.remove('sync-dialog--visible');
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
+    if (!dropdownVisible && status.status === 'idle' && !status.timeout && !status.disconnected && !status.error) {
+      dropdown.classList.remove('sync-dropdown--visible');
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       return;
     }
 
-    showingLanding = false;
-    dialog.classList.add('sync-dialog--visible');
+    if (!dropdownVisible && status.status === 'idle') return;
 
-    // Show appropriate panel
-    const landingPanel = document.getElementById('sync-landing');
-    const pairingPanel = document.getElementById('sync-pairing');
-    const joinPanel = document.getElementById('sync-join');
-    const connectingPanel = document.getElementById('sync-connecting');
-    const connectedPanel = document.getElementById('sync-connected');
-    const errorPanel = document.getElementById('sync-error');
+    dropdown.classList.add('sync-dropdown--visible');
 
-    // Hide all first
-    [landingPanel, pairingPanel, joinPanel, connectingPanel, connectedPanel, errorPanel].forEach(p => {
-      if (p) p.style.display = 'none';
+    // Hide all panels
+    const panels = ['sync-landing', 'sync-pairing', 'sync-join', 'sync-connecting', 'sync-connected', 'sync-error'];
+    panels.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
     });
 
     switch (status.status) {
       case 'pairing':
-        pairingPanel.style.display = 'block';
+        document.getElementById('sync-pairing').style.display = 'block';
         document.getElementById('sync-code').textContent = status.code || '----';
+        const infoEl = document.getElementById('sync-server-info');
+        if (infoEl && status.serverIP) {
+          infoEl.textContent = '服务器: ' + status.serverIP + ':' + (status.serverPort || 48484);
+        }
         startTimer(status.expiresAt);
         break;
 
       case 'discovering':
       case 'connecting':
-        connectingPanel.style.display = 'block';
+        document.getElementById('sync-connecting').style.display = 'block';
         break;
 
       case 'connected':
-        connectedPanel.style.display = 'block';
+        document.getElementById('sync-connected').style.display = 'block';
         document.getElementById('sync-peer-name').textContent = status.peerName || '另一台设备';
-        if (timerInterval) {
-          clearInterval(timerInterval);
-          timerInterval = null;
-        }
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         break;
 
       case 'error':
-        errorPanel.style.display = 'block';
-        document.getElementById('sync-error-msg').textContent = status.error || '发生未知错误';
-        if (timerInterval) {
-          clearInterval(timerInterval);
-          timerInterval = null;
-        }
+        document.getElementById('sync-error').style.display = 'block';
+        document.getElementById('sync-error-msg').textContent = status.error || '未知错误';
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         break;
     }
 
     if (status.timeout) {
-      errorPanel.style.display = 'block';
-      document.getElementById('sync-error-msg').textContent = '配对超时（2 分钟已到），请重试';
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
+      document.getElementById('sync-error').style.display = 'block';
+      document.getElementById('sync-error-msg').textContent = '配对超时，请重试';
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     }
-
     if (status.disconnected) {
-      errorPanel.style.display = 'block';
+      document.getElementById('sync-error').style.display = 'block';
       document.getElementById('sync-error-msg').textContent = '连接已断开';
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     }
   }
 
@@ -128,95 +104,69 @@ const sync = (() => {
     const el = document.getElementById('sync-timer');
     if (!el) return;
     const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-    const min = String(Math.floor(remaining / 60)).padStart(2, '0');
-    const sec = String(remaining % 60).padStart(2, '0');
-    el.textContent = `${min}:${sec}`;
-    el.classList.toggle('sync-dialog__timer--warning', remaining <= 30);
+    el.textContent = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
   }
 
-  // ---- Dialog management ----
+  // ---- Show/hide dropdown ----
 
-  function showDialog() {
-    if (status.status === 'idle') {
-      // Show mode-selection landing panel
-      showingLanding = true;
-      const dialog = document.getElementById('sync-dialog');
-      dialog.classList.add('sync-dialog--visible');
-      document.getElementById('sync-landing').style.display = 'block';
-      document.getElementById('sync-pairing').style.display = 'none';
-      document.getElementById('sync-join').style.display = 'none';
-      document.getElementById('sync-connecting').style.display = 'none';
-      document.getElementById('sync-connected').style.display = 'none';
-      document.getElementById('sync-error').style.display = 'none';
-    } else {
+  function toggleDropdown() {
+    if (status.status !== 'idle') {
+      // Already active, just toggle
+      dropdownVisible = !dropdownVisible;
       render();
+      return;
     }
+    // Idle: show landing
+    status = { ...status, status: 'idle' };
+    dropdownVisible = true;
+    render();
   }
+
+  function closeDropdown() {
+    dropdownVisible = false;
+    if (status.status === 'pairing' || status.status === 'discovering' || status.status === 'connecting') {
+      window.electronAPI.cancelPairing();
+    }
+    document.getElementById('sync-dropdown').classList.remove('sync-dropdown--visible');
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  // ---- Pairing actions ----
 
   function switchToPairing() {
-    // Reset old status flags
     status.timeout = false;
     status.disconnected = false;
     status.error = null;
-
-    showingLanding = false;
-
-    // Hide all panels
-    document.getElementById('sync-landing').style.display = 'none';
-    document.getElementById('sync-pairing').style.display = 'block';
-    document.getElementById('sync-join').style.display = 'none';
-    document.getElementById('sync-connected').style.display = 'none';
-    document.getElementById('sync-connecting').style.display = 'none';
-    document.getElementById('sync-error').style.display = 'none';
-
+    dropdownVisible = true;
+    render();
     window.electronAPI.startPairing().then((result) => {
-      if (!result) {
-        render();
-      }
+      if (!result) render();
     });
   }
 
   function switchToJoin() {
-    // Reset old status flags
     status.timeout = false;
     status.disconnected = false;
     status.error = null;
-
-    showingLanding = false;
-
-    // Hide all panels
+    dropdownVisible = true;
     document.getElementById('sync-landing').style.display = 'none';
-    document.getElementById('sync-pairing').style.display = 'none';
     document.getElementById('sync-join').style.display = 'block';
+    document.getElementById('sync-pairing').style.display = 'none';
     document.getElementById('sync-connected').style.display = 'none';
     document.getElementById('sync-connecting').style.display = 'none';
     document.getElementById('sync-error').style.display = 'none';
-
-    // Reset code inputs
-    const digits = document.querySelectorAll('.sync-dialog__digit');
+    document.getElementById('sync-dropdown').classList.add('sync-dropdown--visible');
+    const digits = document.querySelectorAll('#sync-code-inputs input');
     digits.forEach(d => d.value = '');
     digits[0].focus();
     document.getElementById('sync-connect-btn').disabled = true;
   }
 
-  function hideDialog() {
-    showingLanding = false;
-    if (status.status === 'pairing' || status.status === 'discovering') {
-      window.electronAPI.cancelPairing();
-    }
-    document.getElementById('sync-dialog').classList.remove('sync-dialog--visible');
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
-  }
-
   function handleConnect() {
-    const digits = document.querySelectorAll('.sync-dialog__digit');
+    const digits = document.querySelectorAll('#sync-code-inputs input');
     let code = '';
     digits.forEach(d => code += d.value);
     if (code.length !== 6) return;
-
     document.getElementById('sync-join').style.display = 'none';
     document.getElementById('sync-connecting').style.display = 'block';
     window.electronAPI.joinWithCode(code);
@@ -226,73 +176,84 @@ const sync = (() => {
     window.electronAPI.disconnect();
   }
 
-  // ---- Setup event handlers (called from init) ----
+  function handleCancelPairing() {
+    window.electronAPI.cancelPairing();
+    dropdownVisible = false;
+    document.getElementById('sync-dropdown').classList.remove('sync-dropdown--visible');
+  }
+
+  // ---- Event handlers ----
 
   function setupEventHandlers() {
-    // Landing panel: choose mode
+    // Toggle dropdown on button click
+    document.getElementById('btn-sync')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('sync-dropdown');
+      const btn = document.getElementById('btn-sync');
+      if (dropdownVisible && dropdown && !dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+        closeDropdown();
+      }
+    });
+
     document.getElementById('sync-start-btn')?.addEventListener('click', switchToPairing);
     document.getElementById('sync-join-btn')?.addEventListener('click', switchToJoin);
 
-    // Switch between pairing and join
     document.getElementById('sync-switch-join')?.addEventListener('click', switchToJoin);
-    document.getElementById('sync-switch-start')?.addEventListener('click', switchToPairing);
 
     // Cancel buttons
-    document.querySelectorAll('.sync-dialog__btn--cancel').forEach(btn => {
-      btn.addEventListener('click', hideDialog);
+    document.getElementById('sync-cancel-pairing')?.addEventListener('click', handleCancelPairing);
+    document.querySelectorAll('.sync-dropdown__btn--danger').forEach(btn => {
+      if (btn.id === 'sync-disconnect-btn') return;
+      btn.addEventListener('click', () => {
+        if (btn.id !== 'sync-cancel-pairing') closeDropdown();
+      });
     });
 
-    // Error close buttons
-    document.querySelectorAll('.sync-dialog__btn--error-close').forEach(btn => {
-      btn.addEventListener('click', hideDialog);
+    // Error close
+    document.getElementById('sync-error-close')?.addEventListener('click', () => {
+      window.electronAPI.cancelPairing();
+      closeDropdown();
     });
 
     // Connect button
     document.getElementById('sync-connect-btn')?.addEventListener('click', handleConnect);
 
-    // Code digit inputs
-    document.querySelectorAll('.sync-dialog__digit').forEach(input => {
+    // Digit inputs
+    document.querySelectorAll('#sync-code-inputs input').forEach(input => {
       input.addEventListener('input', (e) => {
         const val = e.target.value.replace(/\D/g, '');
         e.target.value = val;
         if (val && e.target.dataset.index < '5') {
-          const next = document.querySelector(`.sync-dialog__digit[data-index="${parseInt(e.target.dataset.index) + 1}"]`);
+          const next = document.querySelector(`#sync-code-inputs input[data-index="${parseInt(e.target.dataset.index) + 1}"]`);
           if (next) next.focus();
         }
         updateConnectButton();
       });
-
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Backspace' && !e.target.value && e.target.dataset.index > '0') {
-          const prev = document.querySelector(`.sync-dialog__digit[data-index="${parseInt(e.target.dataset.index) - 1}"]`);
+          const prev = document.querySelector(`#sync-code-inputs input[data-index="${parseInt(e.target.dataset.index) - 1}"]`);
           if (prev) { prev.focus(); prev.value = ''; }
           updateConnectButton();
         }
-        if (e.key === 'Enter') {
-          handleConnect();
-        }
+        if (e.key === 'Enter') handleConnect();
       });
-
-      input.addEventListener('focus', () => input.select());
     });
 
     // Disconnect button
     document.getElementById('sync-disconnect-btn')?.addEventListener('click', handleDisconnect);
-
-    // Click overlay to close (only when idle-type states)
-    document.getElementById('sync-dialog-overlay')?.addEventListener('click', () => {
-      if (status.status === 'error' || status.timeout || status.disconnected) {
-        hideDialog();
-      }
-    });
   }
 
   function updateConnectButton() {
-    const digits = document.querySelectorAll('.sync-dialog__digit');
+    const digits = document.querySelectorAll('#sync-code-inputs input');
     let full = true;
     digits.forEach(d => { if (!d.value) full = false; });
     document.getElementById('sync-connect-btn').disabled = !full;
   }
 
-  return { init, showDialog, hideDialog, setupEventHandlers };
+  return { init, setupEventHandlers };
 })();

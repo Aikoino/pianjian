@@ -22,7 +22,8 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
     await new Promise((resolve, reject) => {
       httpServer.once('error', (err) => reject(err));
       httpServer.once('listening', () => resolve());
-      httpServer.listen(48484);
+      httpServer.listen(48484, '0.0.0.0');
+      console.log('[sync] WS 服务端已绑定到 0.0.0.0:48484');
     });
     console.log(`[sync] WS 服务端已绑定到端口 48484`);
   } catch (err) {
@@ -31,11 +32,16 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
       console.error('绑定首选端口异常:', err.message);
     }
     try {
-      httpServer = http.createServer();
+      httpServer = http.createServer((req, res) => {
+        if (req.url === '/ping') {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('pong');
+        }
+      });
       await new Promise((resolve, reject) => {
         httpServer.once('error', (err2) => reject(err2));
         httpServer.once('listening', () => resolve());
-        httpServer.listen(0);
+        httpServer.listen(0, '0.0.0.0');
       });
       console.log(`[sync] WS 服务端已绑定到随机端口 ${httpServer.address().port}`);
     } catch (err2) {

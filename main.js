@@ -622,6 +622,19 @@ ipcMain.handle('sync:getStatus', () => {
 });
 
 app.whenReady().then(() => {
+  // 添加 Windows 防火墙规则（允许同步端口 48484）
+  try {
+    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
+      if (err) console.log('[firewall] 防火墙规则添加失败（可忽略）:', err.message);
+    });
+  } catch (e) {}
+  // 也允许 UDP 发现端口 48483
+  try {
+    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 发现\' -Direction Inbound -Protocol UDP -LocalPort 48483 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
+      if (err) console.log('[firewall] UDP 防火墙规则添加失败（可忽略）:', err.message);
+    });
+  } catch (e) {}
+
   createWindow();
   createTray();
 

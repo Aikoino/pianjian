@@ -22,6 +22,11 @@ function getLocalIPs() {
   return ips;
 }
 
+function getLocalIP() {
+  const ips = getLocalIPs();
+  return ips[0] || '127.0.0.1';
+}
+
 let broadcastSocket = null;
 let broadcastTimer = null;
 
@@ -130,5 +135,5 @@ function stopListening() {
 module.exports = {
   startBroadcast, stopBroadcast,
   startListening, stopListening,
-  getLocalIPs
+  getLocalIPs, getLocalIP
 };

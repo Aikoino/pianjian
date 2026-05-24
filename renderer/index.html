@@ -65,7 +65,8 @@
         </button>
         <button class="title-bar__btn title-bar__btn--minimize" id="btn-minimize" title="最小化">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.5 9a9 9 0 0 1 14.8-3.3L23 10M1 14l4.7 4.3A9 9 0 0 0 20.5 15"/>
           </svg>
         </button>
         <button class="title-bar__btn title-bar__btn--close" id="btn-close" title="关闭">
@@ -96,67 +97,51 @@
       </div>
     </header>
 
-    <!-- 同步配对弹窗 -->
-    <div class="sync-dialog" id="sync-dialog">
-      <div class="sync-dialog__overlay" id="sync-dialog-overlay"></div>
-      <div class="sync-dialog__panel">
-        <!-- 选择模式 -->
-        <div class="sync-dialog__landing" id="sync-landing">
-          <h3>局域网同步</h3>
-          <p class="sync-dialog__hint">通过局域网连接两台设备，实时同步便签数据</p>
-          <button class="sync-dialog__btn sync-dialog__btn--primary sync-dialog__btn--wide" id="sync-start-btn">发起配对</button>
-          <button class="sync-dialog__btn sync-dialog__btn--wide" id="sync-join-btn">我有配对码，加入设备</button>
-          <button class="sync-dialog__btn sync-dialog__btn--cancel" style="margin-top:8px">取消</button>
+    <!-- 同步下拉面板 -->
+    <div class="sync-dropdown" id="sync-dropdown" style="display:none">
+      <!-- 选择模式 -->
+      <div class="sync-dropdown__panel" id="sync-landing">
+        <p class="sync-dropdown__desc">通过局域网连接两台设备，实时同步便签数据</p>
+        <button class="sync-dropdown__btn sync-dropdown__btn--primary" id="sync-start-btn">发起配对</button>
+        <button class="sync-dropdown__btn" id="sync-join-btn">我有配对码，加入设备</button>
+      </div>
+      <!-- 发起方：显示配对码 -->
+      <div class="sync-dropdown__panel" id="sync-pairing" style="display:none">
+        <div class="sync-dropdown__code" id="sync-code">----</div>
+        <p class="sync-dropdown__hint">配对码，2 分钟内有效</p>
+        <p class="sync-dropdown__server-info" id="sync-server-info"></p>
+        <div class="sync-dropdown__timer" id="sync-timer">02:00</div>
+        <button class="sync-dropdown__btn sync-dropdown__btn--danger" id="sync-cancel-pairing">取消配对</button>
+        <button class="sync-dropdown__link" id="sync-switch-join">我有配对码，加入设备 →</button>
+      </div>
+      <!-- 加入方：输入配对码 -->
+      <div class="sync-dropdown__panel" id="sync-join" style="display:none">
+        <p class="sync-dropdown__desc">输入电脑上显示的配对码</p>
+        <div class="sync-dropdown__digits" id="sync-code-inputs">
+          <input maxlength="1" data-index="0" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="1" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="2" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="3" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="4" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="5" inputmode="numeric" pattern="[0-9]">
         </div>
-
-        <!-- 发起方：显示配对码 -->
-        <div class="sync-dialog__pairing" id="sync-pairing" style="display:none">
-          <h3>配对码</h3>
-          <div class="sync-dialog__code" id="sync-code">----</div>
-          <p class="sync-dialog__hint">请在另一台设备上输入此配对码</p>
-          <div class="sync-dialog__timer" id="sync-timer">02:00</div>
-          <button class="sync-dialog__btn sync-dialog__btn--cancel">取消</button>
-          <button class="sync-dialog__link" id="sync-switch-join">我有配对码，加入设备</button>
+        <button class="sync-dropdown__btn sync-dropdown__btn--primary" id="sync-connect-btn" disabled>连接</button>
+        <button class="sync-dropdown__btn sync-dropdown__btn--cancel" style="margin-top:4px">取消</button>
+      </div>
+      <!-- 连接中 -->
+      <div class="sync-dropdown__panel" id="sync-connecting" style="display:none">
+        <div class="sync-dropdown__spinner"></div>
+        <p>正在连接...</p>
+        <button class="sync-dropdown__btn sync-dropdown__btn--danger sync-dropdown__btn--sm" style="margin-top:8px">取消</button>
+      </div>
+      <!-- 已连接 -->
+      <div class="sync-dropdown__panel" id="sync-connected" style="display:none">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:center">
+          <span style="color:#4CAF50;font-size:16px">●</span>
+          <span id="sync-peer-name" style="font-weight:600"></span>
         </div>
-
-        <!-- 加入方：输入配对码 -->
-        <div class="sync-dialog__join" id="sync-join" style="display:none">
-          <h3>输入配对码</h3>
-          <div class="sync-dialog__code-inputs" id="sync-code-inputs">
-            <input maxlength="1" class="sync-dialog__digit" data-index="0" inputmode="numeric" pattern="[0-9]">
-            <input maxlength="1" class="sync-dialog__digit" data-index="1" inputmode="numeric" pattern="[0-9]">
-            <input maxlength="1" class="sync-dialog__digit" data-index="2" inputmode="numeric" pattern="[0-9]">
-            <input maxlength="1" class="sync-dialog__digit" data-index="3" inputmode="numeric" pattern="[0-9]">
-            <input maxlength="1" class="sync-dialog__digit" data-index="4" inputmode="numeric" pattern="[0-9]">
-            <input maxlength="1" class="sync-dialog__digit" data-index="5" inputmode="numeric" pattern="[0-9]">
-          </div>
-          <p class="sync-dialog__hint">输入另一台设备上显示的配对码，配对码 2 分钟内有效</p>
-          <button class="sync-dialog__btn sync-dialog__btn--primary" id="sync-connect-btn" disabled>连接</button>
-          <button class="sync-dialog__btn sync-dialog__btn--cancel">取消</button>
-          <button class="sync-dialog__link" id="sync-switch-start">我没有配对码，创建新的</button>
-        </div>
-
-        <!-- 连接中 -->
-        <div class="sync-dialog__connecting" id="sync-connecting" style="display:none">
-          <div class="sync-dialog__spinner"></div>
-          <p class="sync-dialog__hint">正在连接...</p>
-        </div>
-
-        <!-- 已连接 -->
-        <div class="sync-dialog__connected" id="sync-connected" style="display:none">
-          <div class="sync-dialog__status">
-            <div class="sync-dialog__status-icon sync-dialog__status-icon--connected">&#10003;</div>
-            <p class="sync-dialog__status-name" id="sync-peer-name"></p>
-            <p class="sync-dialog__hint">已建立连接，便签数据实时同步中</p>
-            <button class="sync-dialog__btn sync-dialog__btn--danger" id="sync-disconnect-btn">断开连接</button>
-          </div>
-        </div>
-
-        <!-- 错误/超时/断开 -->
-        <div class="sync-dialog__error" id="sync-error" style="display:none">
-          <p class="sync-dialog__error-msg" id="sync-error-msg"></p>
-          <button class="sync-dialog__btn sync-dialog__btn--primary sync-dialog__btn--error-close">关闭</button>
-        </div>
+        <p class="sync-dropdown__hint">便签数据实时同步中</p>
+        <button class="sync-dropdown__btn sync-dropdown__btn--danger sync-dropdown__btn--sm" id="sync-disconnect-btn">断开</button>
+      </div>
+      <!-- 错误 -->
+      <div class="sync-dropdown__panel" id="sync-error" style="display:none">
+        <p class="sync-dropdown__error" id="sync-error-msg"></p>
+        <button class="sync-dropdown__btn sync-dropdown__btn--sm" id="sync-error-close">关闭</button>
       </div>
     </div>
 
