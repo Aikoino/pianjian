@@ -1,0 +1,31 @@
+{
+  "name": "pianjian-mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "^9.1.0",
+    "@react-navigation/bottom-tabs": "^7.16.1",
+    "@react-navigation/native": "^7.2.4",
+    "buffer": "^6.0.3",
+    "expo": "~56.0.3",
+    "expo-build-properties": "^56.0.14",
+    "expo-crypto": "~56.0.3",
+    "expo-network": "~56.0.4",
+    "expo-notifications": "~56.0.13",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.1",
+    "react-native-tcp-socket": "^6.4.1",
+    "react-native-udp": "^4.1.7"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
