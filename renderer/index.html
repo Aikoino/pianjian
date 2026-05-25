@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>片笺</title>
   <link rel="stylesheet" href="css/base.css">
@@ -65,8 +66,7 @@
         </button>
         <button class="title-bar__btn title-bar__btn--minimize" id="btn-minimize" title="最小化">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-            <path d="M3.5 9a9 9 0 0 1 14.8-3.3L23 10M1 14l4.7 4.3A9 9 0 0 0 20.5 15"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
         <button class="title-bar__btn title-bar__btn--close" id="btn-close" title="关闭">
@@ -98,7 +98,7 @@
     </header>
 
     <!-- 同步下拉面板 -->
-    <div class="sync-dropdown" id="sync-dropdown" style="display:none">
+    <div class="sync-dropdown" id="sync-dropdown">
       <!-- 选择模式 -->
       <div class="sync-dropdown__panel" id="sync-landing">
         <p class="sync-dropdown__desc">通过局域网连接两台设备，实时同步便签数据</p>
@@ -116,18 +116,19 @@
       </div>
       <!-- 加入方：输入配对码 -->
       <div class="sync-dropdown__panel" id="sync-join" style="display:none">
-        <p class="sync-dropdown__desc">输入电脑上显示的配对码</p>
+        <p class="sync-dropdown__desc">输入手机上显示的配对码</p>
         <div class="sync-dropdown__digits" id="sync-code-inputs">
           <input maxlength="1" data-index="0" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="1" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="2" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="3" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="4" inputmode="numeric" pattern="[0-9]"><input maxlength="1" data-index="5" inputmode="numeric" pattern="[0-9]">
         </div>
+        <input class="sync-dropdown__ip-input" id="sync-ip-input" type="text" placeholder="手机 IP（可选，自动发现失败时填写）" autocomplete="off">
         <button class="sync-dropdown__btn sync-dropdown__btn--primary" id="sync-connect-btn" disabled>连接</button>
-        <button class="sync-dropdown__btn sync-dropdown__btn--cancel" style="margin-top:4px">取消</button>
+        <button class="sync-dropdown__btn sync-dropdown__btn--cancel" id="sync-cancel-join" style="margin-top:4px">取消</button>
       </div>
       <!-- 连接中 -->
       <div class="sync-dropdown__panel" id="sync-connecting" style="display:none">
         <div class="sync-dropdown__spinner"></div>
         <p>正在连接...</p>
-        <button class="sync-dropdown__btn sync-dropdown__btn--danger sync-dropdown__btn--sm" style="margin-top:8px">取消</button>
+        <button class="sync-dropdown__btn sync-dropdown__btn--danger sync-dropdown__btn--sm" id="sync-cancel-connecting" style="margin-top:8px">取消</button>
       </div>
       <!-- 已连接 -->
       <div class="sync-dropdown__panel" id="sync-connected" style="display:none">

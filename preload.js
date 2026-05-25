@@ -6,12 +6,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window:close'),
   togglePin: () => ipcRenderer.send('window:togglePin'),
   onPinChanged: (callback) => {
-    ipcRenderer.on('pin:changed', (_event, isPinned) => callback(isPinned));
+    const handler = (_event, isPinned) => callback(isPinned);
+    ipcRenderer.on('pin:changed', handler);
+    return () => ipcRenderer.removeListener('pin:changed', handler);
   },
 
   // 贴边状态
   onSnapChanged: (callback) => {
-    ipcRenderer.on('snap:changed', (_event, state) => callback(state));
+    const handler = (_event, state) => callback(state);
+    ipcRenderer.on('snap:changed', handler);
+    return () => ipcRenderer.removeListener('snap:changed', handler);
   },
 
   // 自由 resize
@@ -31,19 +35,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 提醒
   setReminder: (id, remindAt) => ipcRenderer.invoke('notes:setReminder', id, remindAt),
   onReminderTriggered: (callback) => {
-    ipcRenderer.on('reminder:triggered', (_event, noteId) => callback(noteId));
+    const handler = (_event, noteId) => callback(noteId);
+    ipcRenderer.on('reminder:triggered', handler);
+    return () => ipcRenderer.removeListener('reminder:triggered', handler);
   },
 
   // 同步
   startPairing: () => ipcRenderer.invoke('sync:startPairing'),
   joinWithCode: (code) => ipcRenderer.invoke('sync:joinWithCode', code),
+  connectWithIP: (ip, port, code) => ipcRenderer.invoke('sync:connectWithIP', ip, port, code),
   cancelPairing: () => ipcRenderer.invoke('sync:cancelPairing'),
   disconnect: () => ipcRenderer.invoke('sync:disconnect'),
   getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
   onSyncStatusChanged: (callback) => {
-    ipcRenderer.on('sync:statusChanged', (_event, status) => callback(status));
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('sync:statusChanged', handler);
+    return () => ipcRenderer.removeListener('sync:statusChanged', handler);
   },
   onSyncDataChanged: (callback) => {
-    ipcRenderer.on('sync:dataChanged', () => callback());
+    const handler = () => callback();
+    ipcRenderer.on('sync:dataChanged', handler);
+    return () => ipcRenderer.removeListener('sync:dataChanged', handler);
   }
 });

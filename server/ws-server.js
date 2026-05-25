@@ -86,6 +86,7 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
               const remoteIp = ws._socket?.remoteAddress?.replace(/^::ffff:/, '') || '0.0.0.0';
               if (onPeerConnected) onPeerConnected({ deviceName: msg.deviceName || '未知设备', deviceId: msg.deviceId || '', ip: remoteIp });
             } else {
+              clearTimeout(authTimer);
               ws.send(JSON.stringify({ type: 'auth_fail', reason: '配对码错误' }));
               setTimeout(() => {
                 try { ws.close(4003, 'auth_fail'); } catch (e) {}
@@ -112,6 +113,7 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
     });
 
     ws.on('close', () => {
+      clearTimeout(authTimer);
       if (client === ws) {
         client = null;
         if (authed && onPeerDisconnected) onPeerDisconnected();
@@ -120,6 +122,7 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
 
     ws.on('error', () => {
       if (client === ws) {
+        if (authed && onPeerDisconnected) onPeerDisconnected();
         client = null;
       }
     });

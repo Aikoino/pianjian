@@ -165,32 +165,6 @@ function createWindow() {
   });
 }
 
-function createTrayIcon() {
-  // 生成 32x32 红色圆角方块托盘图标
-  const size = 32;
-  const radius = 6;
-  const buffer = Buffer.alloc(size * size * 4);
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (y * size + x) * 4;
-      let inRect = true;
-      if (x < radius && y < radius && (radius - x) ** 2 + (radius - y) ** 2 > radius ** 2) inRect = false;
-      if (x >= size - radius && y < radius && (x - (size - radius)) ** 2 + (radius - y) ** 2 > radius ** 2) inRect = false;
-      if (x < radius && y >= size - radius && (radius - x) ** 2 + (y - (size - radius)) ** 2 > radius ** 2) inRect = false;
-      if (x >= size - radius && y >= size - radius && (x - (size - radius)) ** 2 + (y - (size - radius)) ** 2 > radius ** 2) inRect = false;
-
-      if (inRect) {
-        buffer[idx] = 0xB7;     // R
-        buffer[idx + 1] = 0x1C; // G
-        buffer[idx + 2] = 0x1C; // B
-        buffer[idx + 3] = 0xFF; // A
-      }
-    }
-  }
-  return nativeImage.createFromBuffer(buffer, { width: size, height: size });
-}
-
 function createTray() {
   // 使用应用图标缩放为 16x16 托盘图标
   let trayIcon;
@@ -607,6 +581,10 @@ ipcMain.handle('sync:startPairing', () => {
 
 ipcMain.handle('sync:joinWithCode', (_event, code) => {
   syncManager.joinWithCode(code);
+});
+
+ipcMain.handle('sync:connectWithIP', (_event, ip, port, code) => {
+  syncManager.connectByIP(ip, port, code);
 });
 
 ipcMain.handle('sync:cancelPairing', () => {

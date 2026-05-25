@@ -3,6 +3,7 @@ const path = require('path');
 const { app } = require('electron');
 
 let configPath;
+let cachedConfig = null;
 
 function getConfigPath() {
   if (!configPath) {
@@ -17,16 +18,23 @@ function getConfigPath() {
 }
 
 function loadConfig() {
+  if (cachedConfig) return cachedConfig;
   try {
     const filePath = getConfigPath();
-    if (!fs.existsSync(filePath)) return {};
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (!fs.existsSync(filePath)) {
+      cachedConfig = {};
+      return cachedConfig;
+    }
+    cachedConfig = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return cachedConfig;
   } catch {
-    return {};
+    cachedConfig = {};
+    return cachedConfig;
   }
 }
 
 function saveConfig(config) {
+  cachedConfig = config;
   const filePath = getConfigPath();
   fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf-8');
 }

@@ -49,20 +49,22 @@ function startBroadcast(code, wsPort, deviceName) {
   broadcastSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   broadcastSocket.on('error', (e) => console.error('[sync] 广播错误:', e.message));
 
+  broadcastSocket.on('listening', () => {
+    console.log(`[sync] 广播 socket 已绑定，开始发送 beacon`);
+    function sendBeacon() {
+      try {
+        broadcastSocket.send(message, 0, message.length, UDP_PORT, '255.255.255.255');
+      } catch (e) {
+        // ignore
+      }
+    }
+    broadcastTimer = setInterval(sendBeacon, BEACON_INTERVAL);
+    sendBeacon();
+  });
+
   broadcastSocket.bind(() => {
     broadcastSocket.setBroadcast(true);
   });
-
-  function sendBeacon() {
-    try {
-      broadcastSocket.send(message, 0, message.length, UDP_PORT, '255.255.255.255');
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  broadcastTimer = setInterval(sendBeacon, BEACON_INTERVAL);
-  sendBeacon();
 }
 
 function stopBroadcast() {

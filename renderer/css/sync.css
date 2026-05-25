@@ -97,6 +97,22 @@
   text-decoration: underline;
 }
 
+.sync-dropdown__ip-input {
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #333;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.sync-dropdown__ip-input:focus {
+  border-color: var(--color-primary, #1a73e8);
+}
+
 .sync-dropdown__code {
   font-size: 32px;
   font-weight: bold;

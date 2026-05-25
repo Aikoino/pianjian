@@ -3,6 +3,7 @@ const path = require('path');
 const { app } = require('electron');
 
 let dataPath;
+let cachedNotes = null;
 
 function getDataPath() {
   if (!dataPath) {
@@ -17,19 +18,24 @@ function getDataPath() {
 }
 
 function loadNotes() {
+  if (cachedNotes) return cachedNotes;
   const filePath = getDataPath();
   try {
     if (!fs.existsSync(filePath)) {
-      return [];
+      cachedNotes = [];
+      return cachedNotes;
     }
     const raw = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(raw);
+    cachedNotes = JSON.parse(raw);
+    return cachedNotes;
   } catch {
-    return [];
+    cachedNotes = [];
+    return cachedNotes;
   }
 }
 
 function saveNotes(notes) {
+  cachedNotes = notes;
   const filePath = getDataPath();
   fs.writeFileSync(filePath, JSON.stringify(notes, null, 2), 'utf-8');
 }

@@ -55,6 +55,7 @@ function connect(ip, port, code, onMessage, onConnected, onDisconnected, onError
     ws.on('open', () => {
       connectFailed = false;
       clearTimeout(connectTimeout);
+      clearTimeout(authTimer);
       ws.send(JSON.stringify({ type: 'auth', token, deviceName, deviceId }));
     });
 
@@ -91,6 +92,7 @@ function connect(ip, port, code, onMessage, onConnected, onDisconnected, onError
 
     ws.on('close', () => {
       clearTimeout(authTimer);
+      clearTimeout(connectTimeout);
       if (authed) {
         // Unexpected disconnect, try reconnect
         if (!closed && reconnectAttempts < MAX_RECONNECT) {
@@ -105,6 +107,8 @@ function connect(ip, port, code, onMessage, onConnected, onDisconnected, onError
 
     ws.on('error', (e) => {
       if (!authed && connectFailed) {
+        connectFailed = false;
+        clearTimeout(authTimer);
         if (onError) onError('连接失败: ' + (e.message || '网络错误'));
         if (onDisconnected) onDisconnected();
       }

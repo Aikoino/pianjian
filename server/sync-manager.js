@@ -3,6 +3,7 @@ const { getDeviceId, getDeviceName, setPairedDevice, clearPairedDevice } = requi
 const { startBroadcast, stopBroadcast, startListening, stopListening, getLocalIP } = require('./discovery');
 const { createServer } = require('./ws-server');
 const { connect } = require('./ws-client');
+const crypto = require('crypto');
 
 const PAIRING_TIMEOUT = 120000; // 2 minutes
 const CONNECT_TIMEOUT = 15000;  // 15 seconds
@@ -23,7 +24,7 @@ let pairingTimer = null;
 let isApplyingRemote = false;
 
 function notifyStatus() {
-  const s = { ...state };
+  const s = { ...state, state: state.status };
   statusCallbacks.forEach(cb => cb(s));
 }
 
@@ -35,7 +36,7 @@ function onStatusChange(cb) {
 }
 
 function getStatus() {
-  return { ...state };
+  return { ...state, state: state.status };
 }
 
 function setStatus(s) {
@@ -94,7 +95,7 @@ function broadcast(msg) {
 async function startPairing() {
   if (state.status !== 'idle') return null;
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.randomInt(100000, 1000000));
   const expiresAt = Date.now() + PAIRING_TIMEOUT;
   const deviceName = getDeviceName();
   const deviceId = getDeviceId();
@@ -329,8 +330,49 @@ function init(mainWindow) {
   setMainWindow(mainWindow);
 }
 
+// ---- Direct IP connect (bypass UDP discovery) ----
+
+function connectByIP(ip, port, code) {
+  if (state.status !== 'idle') return;
+
+  setStatus({ status: 'connecting' });
+
+  clearTimeout(pairingTimer);
+  pairingTimer = setTimeout(() => {
+    stopSync();
+    setStatus({ status: 'idle', timeout: true });
+  }, CONNECT_TIMEOUT);
+
+  client = connect(
+    ip, port, code,
+    (msg) => handleRemoteMessage(msg),
+    () => {
+      clearTimeout(pairingTimer);
+      setPairedDevice({
+        deviceId: '',
+        deviceName: '手机设备',
+        ip,
+        wsPort: port,
+        pairedAt: new Date().toISOString()
+      });
+      setStatus({ status: 'connected', peerName: '手机设备' });
+      const notes = loadNotes();
+      broadcast({ type: 'sync_full', notes, deviceId: getDeviceId(), role: 'follower' });
+    },
+    () => {
+      stopSync();
+      setStatus({ status: 'idle', disconnected: true });
+    },
+    (err) => {
+      setStatus({ status: 'error', error: err });
+    },
+    getDeviceName(),
+    getDeviceId()
+  );
+}
+
 module.exports = {
   init, getStatus, onStatusChange,
-  startPairing, joinWithCode, cancelPairing, disconnect,
+  startPairing, joinWithCode, connectByIP, cancelPairing, disconnect,
   broadcast
 };
