@@ -1,6 +1,6 @@
 {
   "name": "pianjian",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "片笺 - 轻量级桌面便签软件",
   "main": "main.js",
   "scripts": {
