@@ -122,37 +122,41 @@ function handleRemoteMessage(msg) {
 export async function startPairing() {
   if (state.status !== 'idle') return null;
 
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  const code = String(100000 + (arr[0] % 900000));
+  const code = String(100000 + Math.floor(Math.random() * 900000));
   const expiresAt = Date.now() + PAIRING_TIMEOUT;
   const deviceName = await getDeviceName();
 
   setStatus({ status: 'pairing', code, expiresAt, deviceName, role: 'authority' });
 
   // 启动 WS 服务器
-  server = await createServer(
-    code,
-    (msg) => handleRemoteMessage(msg),
-    (peerInfo) => {
-      clearTimeout(pairingTimer);
-      setPairedDevice({
-        deviceId: peerInfo.deviceId,
-        deviceName: peerInfo.deviceName,
-        ip: peerInfo.ip,
-        wsPort: server.port,
-        pairedAt: new Date().toISOString(),
-      });
-      setStatus({ status: 'connected', peerName: peerInfo.deviceName, role: 'authority' });
-    },
-    () => {
-      stopSync();
-      setStatus({ status: 'idle', disconnected: true });
-    },
-    (err) => {
-      setStatus({ status: 'error', error: err });
-    }
-  );
+  try {
+    server = await createServer(
+      code,
+      (msg) => handleRemoteMessage(msg),
+      (peerInfo) => {
+        clearTimeout(pairingTimer);
+        setPairedDevice({
+          deviceId: peerInfo.deviceId,
+          deviceName: peerInfo.deviceName,
+          ip: peerInfo.ip,
+          wsPort: server.port,
+          pairedAt: new Date().toISOString(),
+        });
+        setStatus({ status: 'connected', peerName: peerInfo.deviceName, role: 'authority' });
+      },
+      () => {
+        stopSync();
+        setStatus({ status: 'idle', disconnected: true });
+      },
+      (err) => {
+        setStatus({ status: 'error', error: err });
+      }
+    );
+  } catch (e) {
+    console.error('[sync] createServer 异常:', e);
+    setStatus({ status: 'error', error: '服务器启动失败: ' + e.message });
+    return null;
+  }
 
   if (server.port === 0) {
     setStatus({ status: 'error', error: '无法启动服务器' });
@@ -160,7 +164,49 @@ export async function startPairing() {
   }
 
   // 开始 UDP 广播
-  startBroadcast(code, server.port, deviceName);
+  try {
+    startBroadcast(code, server.port, deviceName);
+  } catch (e) {
+    console.error('[sync] startBroadcast 异常:', e);
+  }
+
+  // 同时监听电脑的 beacon（电脑加入时会广播自己的 WS 服务器地址）
+  // 这样即使手机的广播被防火墙拦截，电脑的广播到达手机后，手机可以主动连接电脑
+  const deviceId = await getDeviceId();
+  let desktopFound = false;
+  startListening(
+    code,
+    (peerInfo) => {
+      if (desktopFound) return;
+      desktopFound = true;
+      stopBroadcast();
+      stopListening();
+      clearTimeout(pairingTimer);
+
+      // 电脑的 beacon 到达 → 手机主动连接电脑的 WS 服务器
+      setStatus({ status: 'connecting' });
+      client = connect(
+        peerInfo.ip, peerInfo.wsPort, code,
+        (msg) => handleRemoteMessage(msg),
+        () => {
+          // 认证成功：保存配对信息，发送同步数据，保持连接等待电脑回复
+          clearTimeout(pairingTimer);
+          setPairedDevice({
+            deviceId: peerInfo.deviceId, deviceName: peerInfo.deviceName,
+            ip: peerInfo.ip, wsPort: peerInfo.wsPort,
+            pairedAt: new Date().toISOString(),
+          });
+          setStatus({ status: 'connected', peerName: peerInfo.deviceName, role: 'follower' });
+          const notes = notesStore.getNotes();
+          broadcast({ type: 'sync_full', notes, deviceId, role: 'follower' });
+        },
+        () => { stopSync(); setStatus({ status: 'idle', disconnected: true }); },
+        (err) => { setStatus({ status: 'error', error: err }); },
+        deviceName, deviceId
+      );
+    },
+    () => {} // UDP 监听错误静默处理
+  );
 
   // 超时处理
   pairingTimer = setTimeout(() => {
@@ -189,37 +235,41 @@ export async function joinWithCode(code) {
   startListening(
     code,
     (peerInfo) => {
-      if (found) return;
-      found = true;
-      stopListening();
       clearTimeout(pairingTimer);
 
-      setStatus({ status: 'connecting' });
+      if (!found) {
+        // 第一次发现：创建连接
+        found = true;
+        setStatus({ status: 'connecting' });
 
-      clearTimeout(pairingTimer);
-      pairingTimer = setTimeout(() => {
-        stopSync();
-        setStatus({ status: 'idle', timeout: true });
-      }, CONNECT_TIMEOUT);
+        pairingTimer = setTimeout(() => {
+          stopSync();
+          setStatus({ status: 'idle', timeout: true });
+        }, CONNECT_TIMEOUT);
 
-      client = connect(
-        peerInfo.ip, peerInfo.wsPort, code,
-        (msg) => handleRemoteMessage(msg),
-        () => {
-          clearTimeout(pairingTimer);
-          setPairedDevice({
-            deviceId: peerInfo.deviceId, deviceName: peerInfo.deviceName,
-            ip: peerInfo.ip, wsPort: peerInfo.wsPort,
-            pairedAt: new Date().toISOString(),
-          });
-          setStatus({ status: 'connected', peerName: peerInfo.deviceName, role: 'follower' });
-          const notes = notesStore.getNotes();
-          broadcast({ type: 'sync_full', notes, deviceId, role: 'follower' });
-        },
-        () => { stopSync(); setStatus({ status: 'idle', disconnected: true }); },
-        (err) => { setStatus({ status: 'error', error: err }); },
-        deviceName, deviceId
-      );
+        client = connect(
+          peerInfo.ip, peerInfo.wsPort, code,
+          (msg) => handleRemoteMessage(msg),
+          () => {
+            clearTimeout(pairingTimer);
+            setPairedDevice({
+              deviceId: peerInfo.deviceId, deviceName: peerInfo.deviceName,
+              ip: peerInfo.ip, wsPort: peerInfo.wsPort,
+              pairedAt: new Date().toISOString(),
+            });
+            setStatus({ status: 'connected', peerName: peerInfo.deviceName, role: 'follower' });
+            const notes = notesStore.getNotes();
+            broadcast({ type: 'sync_full', notes, deviceId, role: 'follower' });
+          },
+          () => { stopSync(); setStatus({ status: 'idle', disconnected: true }); },
+          (err) => { setStatus({ status: 'error', error: err }); },
+          deviceName, deviceId
+        );
+      } else if (client && client.conn) {
+        if (client.conn.port !== peerInfo.wsPort) {
+          client.conn.port = peerInfo.wsPort;
+        }
+      }
     },
     (err) => { setStatus({ status: 'error', error: err }); }
   );

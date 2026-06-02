@@ -4,7 +4,8 @@ import { log } from '../utils/logger';
 
 // 纯手写最小 WebSocket 服务器（不依赖 ws 库的 Node.js stream）
 export function createServer(code, onMessage, onPeerConnected, onPeerDisconnected, onError) {
-  return new Promise(async (resolve) => {
+  return new Promise(async (resolve, reject) => {
+    try {
     const targetToken = await sha256(code);
     log('WS-服务器', `创建服务器 token=${targetToken.slice(0, 8)}...`);
     let wsSocket = null;
@@ -151,6 +152,11 @@ export function createServer(code, onMessage, onPeerConnected, onPeerDisconnecte
     });
 
     tryBind(48484);
+    } catch (e) {
+      log('WS-服务器', `创建异常: ${e.message}`);
+      if (onError) onError('服务器创建失败: ' + e.message);
+      reject(e);
+    }
   });
 }
 

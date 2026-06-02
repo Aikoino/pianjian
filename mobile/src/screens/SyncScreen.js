@@ -29,6 +29,7 @@ export default function SyncScreen() {
   const [status, setStatus] = useState(syncManager.getStatus());
   const [logs, setLogs] = useState(getLogs());
   const [phoneIP, setPhoneIP] = useState('');
+  const [lastError, setLastError] = useState('');
   const logRef = useRef(null);
 
   useEffect(() => {
@@ -50,13 +51,21 @@ export default function SyncScreen() {
 
   async function handleStartPairing() {
     clearLogs();
-    const result = await syncManager.startPairing();
-    if (result) setPairingCode(result.code);
+    setLastError('');
+    try {
+      const result = await syncManager.startPairing();
+      if (result) setPairingCode(result.code);
+    } catch (e) {
+      const msg = '启动失败: ' + (e.message || e);
+      setLastError(msg);
+      console.error('[SyncScreen]', msg, e);
+    }
   }
 
   function handleJoin() {
     if (code.length !== 6) { alert('请输入 6 位配对码'); return; }
     clearLogs();
+    setLastError('');
     syncManager.joinWithCode(code);
   }
 
@@ -64,6 +73,7 @@ export default function SyncScreen() {
     if (!ip.trim()) { alert('请输入 IP 地址'); return; }
     if (!code.trim()) { alert('请输入配对码'); return; }
     clearLogs();
+    setLastError('');
     syncManager.connectByIP(ip.trim(), wsPort.trim() || '48484', code.trim());
   }
 
@@ -84,6 +94,7 @@ export default function SyncScreen() {
         {status.role && <Text style={styles.roleTag}>{status.role === 'authority' ? '主设备' : '从设备'}</Text>}
       </View>
       {status.error && <Text style={styles.errorText}>{status.error}</Text>}
+      {lastError !== '' && <Text style={[styles.errorText, { fontWeight: 'bold' }]}>{lastError}</Text>}
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
 

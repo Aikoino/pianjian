@@ -160,32 +160,69 @@ function joinWithCode(code) {
   setStatus({ status: 'discovering' });
 
   let found = false;
+  const deviceName = getDeviceName();
+  const deviceId = getDeviceId();
 
+  // ---- 双向发现：启动 WS 服务器 + UDP 广播，让手机可以反向发现桌面端 ----
+  createServer(
+    code,
+    (msg) => handleRemoteMessage(msg),
+    (peerInfo) => {
+      if (found) return;
+      found = true;
+      stopBroadcast();
+      stopListening();
+      clearTimeout(pairingTimer);
+      setPairedDevice({
+        deviceId: peerInfo.deviceId,
+        deviceName: peerInfo.deviceName,
+        ip: peerInfo.ip,
+        wsPort: server ? server.port : 48484,
+        pairedAt: new Date().toISOString()
+      });
+      setStatus({ status: 'connected', peerName: peerInfo.deviceName });
+    },
+    () => {
+      stopSync();
+      setStatus({ status: 'idle', disconnected: true });
+    },
+    (err) => {
+      console.error('[sync] WS 服务端错误:', err);
+    }
+  ).then(srv => {
+    server = srv;
+    if (srv.port > 0) {
+      startBroadcast(code, srv.port, deviceName);
+      setStatus({ serverPort: srv.port });
+      console.log(`[sync] 双向发现: WS 服务端监听 ${srv.port}，UDP 广播已启动`);
+    }
+  }).catch(err => {
+    console.error('[sync] WS 服务端启动失败:', err.message);
+  });
+
+  // 同时监听手机的 UDP 广播（原有逻辑）
   startListening(
     code,
     (peerInfo) => {
       if (found) return;
       found = true;
       stopListening();
+      stopBroadcast();
       clearTimeout(pairingTimer);
 
       setStatus({ status: 'connecting' });
 
-      // Connection-phase timeout (shorter than full pairing timeout)
-      clearTimeout(pairingTimer);
       pairingTimer = setTimeout(() => {
         stopSync();
         setStatus({ status: 'idle', timeout: true });
       }, CONNECT_TIMEOUT);
 
-      // Connect to peer
       client = connect(
         peerInfo.ip,
         peerInfo.wsPort,
         code,
         (msg) => handleRemoteMessage(msg),
         () => {
-          // Connected
           clearTimeout(pairingTimer);
           setPairedDevice({
             deviceId: peerInfo.deviceId,
@@ -195,20 +232,18 @@ function joinWithCode(code) {
             pairedAt: new Date().toISOString()
           });
           setStatus({ status: 'connected', peerName: peerInfo.deviceName });
-          // Full sync: send all local notes (joiner is follower)
           const notes = loadNotes();
           broadcast({ type: 'sync_full', notes, deviceId: getDeviceId(), role: 'follower' });
         },
         () => {
-          // Disconnected
           stopSync();
           setStatus({ status: 'idle', disconnected: true });
         },
         (err) => {
           setStatus({ status: 'error', error: err });
         },
-        getDeviceName(),
-        getDeviceId()
+        deviceName,
+        deviceId
       );
     },
     (err) => {
@@ -216,7 +251,7 @@ function joinWithCode(code) {
     }
   );
 
-  // Discovery timeout (same 2 min)
+  // Discovery timeout
   pairingTimer = setTimeout(() => {
     if (state.status === 'discovering' || state.status === 'connecting') {
       stopSync();

@@ -8,6 +8,8 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
   let closed = false;
   let reconnectTimer = null;
   let reconnectAttempts = 0;
+  // 使用可变引用，onFound 回调可以更新端口号
+  const conn = { ip, port };
 
   function cleanup() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -18,9 +20,9 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
 
     try {
       const token = await sha256(code);
-      log('WS-客户端', `连接 ws://${ip}:${port} token=${token.slice(0, 8)}...`);
+      log('WS-客户端', `连接 ws://${conn.ip}:${conn.port} token=${token.slice(0, 8)}...`);
 
-      ws = new WebSocket(`ws://${ip}:${port}`);
+      ws = new WebSocket(`ws://${conn.ip}:${conn.port}`);
       let authed = false;
       let authTimer = null;
       let connectFailed = true;
@@ -29,8 +31,6 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
         if (connectFailed) {
           log('WS-客户端', `连接超时 (15s)`);
           try { ws.close(); } catch (e) {}
-          if (onError) onError('连接超时');
-          if (onDisconnected) onDisconnected();
         }
       }, 15000);
 
@@ -38,8 +38,6 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
         if (!authed) {
           log('WS-客户端', `认证超时 (10s)`);
           try { ws.close(); } catch (e) {}
-          if (onError) onError('认证超时');
-          if (onDisconnected) onDisconnected();
         }
       }, 10000);
 
@@ -66,7 +64,6 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
               log('WS-客户端', `认证失败: ${msg.reason}`);
               if (onError) onError(msg.reason || '配对码验证失败');
               try { ws.close(); } catch (e) {}
-              if (onDisconnected) onDisconnected();
             }
             return;
           }
@@ -82,24 +79,18 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
       ws.onclose = (event) => {
         clearTimeout(authTimer);
         log('WS-客户端', `连接关闭 code=${event.code} reason=${event.reason} wasClean=${event.wasClean}`);
-        if (authed) {
-          if (!closed && reconnectAttempts < MAX_RECONNECT) {
-            reconnectAttempts++;
-            const delay = Math.min(5000 * reconnectAttempts, 30000);
-            log('WS-客户端', `${delay / 1000}s 后重连 (${reconnectAttempts}/${MAX_RECONNECT})`);
-            reconnectTimer = setTimeout(doConnect, delay);
-          } else {
-            if (onDisconnected) onDisconnected();
-          }
+        if (!closed && reconnectAttempts < MAX_RECONNECT) {
+          reconnectAttempts++;
+          const delay = Math.min(5000 * reconnectAttempts, 30000);
+          log('WS-客户端', `${delay / 1000}s 后重连 (${reconnectAttempts}/${MAX_RECONNECT})`);
+          reconnectTimer = setTimeout(doConnect, delay);
+        } else {
+          if (onDisconnected) onDisconnected();
         }
       };
 
       ws.onerror = (event) => {
         log('WS-客户端', `错误: ${event.message || '未知错误'}`);
-        if (!authed && connectFailed) {
-          if (onError) onError('连接失败: ' + (event.message || '网络错误'));
-          if (onDisconnected) onDisconnected();
-        }
       };
     } catch (e) {
       log('WS-客户端', `异常: ${e.message}`);
@@ -122,5 +113,6 @@ export function connect(ip, port, code, onMessage, onConnected, onDisconnected, 
     }
   }
 
-  return { disconnect, send };
+  // 暴露 conn 引用，允许 discovery 回调更新端口
+  return { disconnect, send, conn };
 }

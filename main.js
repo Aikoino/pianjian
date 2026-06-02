@@ -1,5 +1,12 @@
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, Notification } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+// 图标路径：生产模式从 resources 目录读取，开发模式从 build 目录读取
+const ICON_PATH = (() => {
+  const prodPath = path.join(process.resourcesPath || '', 'icon.png');
+  return fs.existsSync(prodPath) ? prodPath : path.join(__dirname, 'build', 'icon.png');
+})();
 
 // 测试多实例支持（通过环境变量指定不同数据目录）
 // 该环境变量会覆盖 data-store/config-store/sync-store 中的 appData 路径
@@ -103,7 +110,7 @@ function triggerReminder(note) {
     const notification = new Notification({
       title: '片笺 - 便签提醒',
       body: (note.content || '(无内容)').substring(0, 200),
-      icon: path.join(__dirname, 'build', 'icon.png')
+      icon: ICON_PATH
     });
     notification.on('click', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -169,8 +176,7 @@ function createTray() {
   // 使用应用图标缩放为 16x16 托盘图标
   let trayIcon;
   try {
-    const iconPath = path.join(__dirname, 'build', 'icon.png');
-    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    trayIcon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 });
   } catch {
     trayIcon = nativeImage.createEmpty();
   }
@@ -600,9 +606,9 @@ ipcMain.handle('sync:getStatus', () => {
 });
 
 app.whenReady().then(() => {
-  // 添加 Windows 防火墙规则（允许同步端口 48484）
+  // 添加 Windows 防火墙规则（允许同步端口 48484 和 48485）
   try {
-    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
+    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484,48485 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
       if (err) console.log('[firewall] 防火墙规则添加失败（可忽略）:', err.message);
     });
   } catch (e) {}

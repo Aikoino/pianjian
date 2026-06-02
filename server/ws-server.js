@@ -15,29 +15,29 @@ async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected
   let actualPort = 0;
   let httpServer = null;
 
-  // 使用 HTTP server 预绑定端口，然后通过 {server} 选项传递给 WSS。
-  // 端口在整个过程中保持被占用状态，彻底消除 probePort 先探测后释放的竞态窗口。
-  try {
-    httpServer = http.createServer();
-    await new Promise((resolve, reject) => {
-      httpServer.once('error', (err) => reject(err));
-      httpServer.once('listening', () => resolve());
-      httpServer.listen(48484, '0.0.0.0');
-      console.log('[sync] WS 服务端已绑定到 0.0.0.0:48484');
-    });
-    console.log(`[sync] WS 服务端已绑定到端口 48484`);
-  } catch (err) {
-    // 首选端口被占用（EADDRINUSE），尝试系统分配端口
-    if (err.code !== 'EADDRINUSE') {
-      console.error('绑定首选端口异常:', err.message);
-    }
+  // 依次尝试 48484、48485，最后回退到随机端口
+  const TRY_PORTS = [48484, 48485];
+  for (const port of TRY_PORTS) {
     try {
-      httpServer = http.createServer((req, res) => {
-        if (req.url === '/ping') {
-          res.writeHead(200, { 'Content-Type': 'text/plain' });
-          res.end('pong');
-        }
+      httpServer = http.createServer();
+      await new Promise((resolve, reject) => {
+        httpServer.once('error', (err) => reject(err));
+        httpServer.once('listening', () => resolve());
+        httpServer.listen(port, '0.0.0.0');
       });
+      console.log(`[sync] WS 服务端已绑定到端口 ${port}`);
+      break;
+    } catch (err) {
+      httpServer = null;
+      if (err.code !== 'EADDRINUSE') {
+        console.error(`绑定端口 ${port} 异常:`, err.message);
+      }
+    }
+  }
+  // 所有固定端口都被占用，使用随机端口
+  if (!httpServer) {
+    try {
+      httpServer = http.createServer();
       await new Promise((resolve, reject) => {
         httpServer.once('error', (err2) => reject(err2));
         httpServer.once('listening', () => resolve());
