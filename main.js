@@ -303,6 +303,9 @@ function scheduleSaveBounds() {
   }, 300);
 }
 
+let lastMoveTime = 0;
+let moveCountAfterEdge = 0;
+
 function setupSnap() {
   mainWindow.on('move', () => {
     if (ignoreMove || !mainWindow) return;
@@ -321,38 +324,59 @@ function setupSnap() {
 
     if (unsnapCooldown) return;
 
-    // 拖拽停止 300ms 后才检测贴边
     clearTimeout(snapPending);
+    snapPending = null;
+
     const bounds = mainWindow.getBounds();
     const display = screen.getDisplayMatching(bounds);
-    const { x: wx, y: wy, width: ww, height: wh } = display.workArea;
-
+    const { x: wx, width: ww } = display.workArea;
     const distToLeft = bounds.x - wx;
     const distToRight = (wx + ww) - (bounds.x + bounds.width);
 
     let edge = null;
     if (Math.abs(distToLeft) <= SNAP) edge = 'left';
     else if (Math.abs(distToRight) <= SNAP) edge = 'right';
-    if (!edge) return;
 
-    snapPending = setTimeout(() => {
-      const cur = mainWindow.getBounds();
-      const visibleX = cur.x;
-      const visibleY = cur.y;
-
-      let hiddenX;
-      if (edge === 'right') {
-        hiddenX = wx + ww - HANDLE_VISIBLE;
-      } else {
-        hiddenX = wx - cur.width + HANDLE_VISIBLE;
+    if (edge) {
+      const now = Date.now();
+      if (now - lastMoveTime > 100) {
+        // 超过 100ms 没有 move 事件 → 认为新一轮拖拽开始
+        moveCountAfterEdge = 0;
       }
+      moveCountAfterEdge++;
+      lastMoveTime = now;
 
-      snapState = { edge, hiddenX, hiddenY: visibleY, visibleX, visibleY, isShowing: false };
-      setSnapState({ edge, hiddenX, hiddenY: visibleY, visibleX, visibleY });
-      setPosSafely(hiddenX, visibleY);
-      mainWindow.webContents.send('snap:changed', { snapped: true, edge, showing: false });
-      startHoverPoll();
-    }, 300);
+      if (moveCountAfterEdge === 1) {
+        // 第一次检测到在边缘：启动 500ms 定时器
+        const detectedEdge = edge;
+        snapPending = setTimeout(() => {
+          if (snapState || unsnapCooldown) return;
+          const cur = mainWindow.getBounds();
+          const curDisplay = screen.getDisplayMatching(cur);
+          const { x: cwx, width: cww } = curDisplay.workArea;
+          const cDistLeft = cur.x - cwx;
+          const cDistRight = (cwx + cww) - (cur.x + cur.width);
+          let snapEdge = null;
+          if (Math.abs(cDistLeft) <= SNAP) snapEdge = 'left';
+          else if (Math.abs(cDistRight) <= SNAP) snapEdge = 'right';
+          if (!snapEdge) return;
+
+          const visibleX = cur.x;
+          const visibleY = cur.y;
+          let hiddenX = snapEdge === 'right'
+            ? cwx + cww - HANDLE_VISIBLE
+            : cwx - cur.width + HANDLE_VISIBLE;
+
+          snapState = { edge: snapEdge, hiddenX, hiddenY: visibleY, visibleX, visibleY, isShowing: false };
+          setSnapState({ edge: snapEdge, hiddenX, hiddenY: visibleY, visibleX, visibleY });
+          setPosSafely(hiddenX, visibleY);
+          mainWindow.webContents.send('snap:changed', { snapped: true, edge: snapEdge, showing: false });
+          startHoverPoll();
+        }, 500);
+      }
+      // moveCountAfterEdge > 1 → 用户还在拖拽，不重置定时器（保持 500ms 倒计时）
+    }
+    // 不在边缘：moveCountAfterEdge 在下次进入边缘时重置
   });
 }
 
