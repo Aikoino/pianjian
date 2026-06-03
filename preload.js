@@ -56,5 +56,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = () => callback();
     ipcRenderer.on('sync:dataChanged', handler);
     return () => ipcRenderer.removeListener('sync:dataChanged', handler);
-  }
+  },
+
+  // 更新
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  onUpdateAvailable: (callback) => {
+    const handler = (_event, info) => callback(info);
+    ipcRenderer.on('update:available', handler);
+    return () => ipcRenderer.removeListener('update:available', handler);
+  },
+  openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
 });

@@ -11,6 +11,7 @@ import SyncScreen from './src/screens/SyncScreen';
 import notesStore from './src/store/notesStore';
 import * as syncManager from './src/sync/syncManager';
 import { requestPermission } from './src/utils/notifications';
+import { checkForUpdate } from './src/utils/update';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,7 +19,9 @@ export default function App() {
   useEffect(() => {
     notesStore.loadNotes();
     const unsubSync = syncManager.init();
-    requestPermission(); // 请求通知权限
+    requestPermission();
+    // 延迟 3 秒检查更新，避免影响启动速度
+    setTimeout(checkForUpdate, 3000);
     return () => { unsubSync(); };
   }, []);
 

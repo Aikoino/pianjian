@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' file: data:">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>片笺</title>
   <link rel="stylesheet" href="css/base.css">
@@ -13,6 +13,13 @@
   <link rel="stylesheet" href="css/sync.css">
 </head>
 <body>
+  <!-- 更新通知 -->
+  <div class="update-banner" id="update-banner" style="display:none">
+    <span class="update-banner__text" id="update-text"></span>
+    <button class="update-banner__btn" id="btn-update-download">下载</button>
+    <button class="update-banner__close" id="btn-update-close">&times;</button>
+  </div>
+
   <div class="app-container">
 
     <!-- 贴边书签把手 -->

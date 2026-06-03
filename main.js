@@ -141,6 +141,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
       preload: `${__dirname}/preload.js`
     }
   });
@@ -605,6 +606,45 @@ ipcMain.handle('sync:getStatus', () => {
   return syncManager.getStatus();
 });
 
+// ---- 应用更新检查 ----
+const https = require('https');
+
+function checkForUpdate() {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/Aikoino/pianjian/releases/latest',
+      headers: { 'User-Agent': 'pianjian-app' },
+      timeout: 10000,
+    };
+    https.get(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const release = JSON.parse(data);
+          const latestVersion = release.tag_name?.replace('v', '') || '';
+          const currentVersion = app.getVersion();
+          const hasUpdate = latestVersion && latestVersion !== currentVersion;
+          const downloadUrl = release.html_url || '';
+          const releaseNotes = release.body || '';
+          resolve({ hasUpdate, latestVersion, currentVersion, downloadUrl, releaseNotes });
+        } catch (e) {
+          resolve({ hasUpdate: false });
+        }
+      });
+    }).on('error', () => {
+      resolve({ hasUpdate: false });
+    });
+  });
+}
+
+ipcMain.handle('update:check', () => checkForUpdate());
+
+ipcMain.on('shell:openExternal', (_event, url) => {
+  require('electron').shell.openExternal(url);
+});
+
 app.whenReady().then(() => {
   // 添加 Windows 防火墙规则（允许同步端口 48484 和 48485）
   try {
@@ -649,6 +689,17 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('sync:statusChanged', status);
     }
   });
+
+  // 启动时检查更新（延迟 5 秒，避免影响启动速度）
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      checkForUpdate().then((info) => {
+        if (info.hasUpdate && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('update:available', info);
+        }
+      });
+    }
+  }, 5000);
 
   // 开机自启时隐藏到托盘，否则显示窗口
   if (app.getLoginItemSettings().openAtLogin) {

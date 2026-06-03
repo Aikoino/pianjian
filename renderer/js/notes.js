@@ -12,8 +12,8 @@ const notes = (() => {
     s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
     s = s.replace(/_(.+?)_/g, '<em>$1</em>');
     s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px">');
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px">');
+    s = s.replace(/\[([^\]]+)\]\s*\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
     return s;
   }
 
@@ -46,14 +46,30 @@ const notes = (() => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // 围栏代码块
+      // 围栏代码块（支持 ```code 同行）
       if (/^```/.test(line)) {
         closeLists(); closeBlockquote();
         if (inCode) { html.push('</code></pre>'); inCode = false; }
-        else { html.push('<pre><code>'); inCode = true; }
+        else {
+          const rest = line.slice(3);
+          if (rest.trim()) html.push('<pre><code>' + rest.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+          else html.push('<pre><code>');
+          inCode = true;
+        }
         continue;
       }
-      if (inCode) { html.push(line.replace(/</g, '&lt;').replace(/>/g, '&gt;')); continue; }
+      if (inCode) {
+        // 检查行尾是否有 ```（提取时可能被合并）
+        const closeMatch = line.match(/^(.*?)```$/);
+        if (closeMatch) {
+          if (closeMatch[1]) html.push(closeMatch[1].replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+          html.push('</code></pre>');
+          inCode = false;
+        } else {
+          html.push(line.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+        }
+        continue;
+      }
 
       // 分割线
       if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) {
@@ -420,9 +436,9 @@ const notes = (() => {
 
     body.addEventListener('input', saveDebounced);
 
-    // body 点击：显示模式 → 编辑模式
+    // body 点击：显示模式 → 编辑模式（链接点击不触发）
     body.addEventListener('click', (e) => {
-      if (!isEditing) {
+      if (!isEditing && !e.target.closest('a')) {
         e.stopPropagation();
         showEditMode();
       }
@@ -594,9 +610,9 @@ const notes = (() => {
       expand();
     });
 
-    // 卡片点击：折叠→展开，显示→编辑（排除按钮区域）
+    // 卡片点击：折叠→展开，显示→编辑（排除按钮和链接）
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle')) return;
+      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle, a')) return;
 
       if (card.classList.contains('note-card--collapsed')) {
         expand();
