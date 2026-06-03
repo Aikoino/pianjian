@@ -44,9 +44,48 @@ const state = (() => {
   }
 
   async function deleteNote(id) {
+    // 软删除：标记 deletedAt，不从数组移除
+    const note = notes.find(n => n.id === id);
+    if (note) {
+      note.deletedAt = new Date().toISOString();
+      note.updatedAt = new Date().toISOString();
+      await window.electronAPI.updateNote(id, { deletedAt: note.deletedAt, updatedAt: note.updatedAt });
+    }
+    notify();
+  }
+
+  async function restoreNote(id) {
+    const note = notes.find(n => n.id === id);
+    if (note) {
+      note.deletedAt = undefined;
+      note.updatedAt = new Date().toISOString();
+      await window.electronAPI.updateNote(id, { deletedAt: null, updatedAt: note.updatedAt });
+    }
+    notify();
+  }
+
+  async function permanentDeleteNote(id) {
     await window.electronAPI.deleteNote(id);
     notes = notes.filter(n => n.id !== id);
     notify();
+  }
+
+  function getDeletedNotes() {
+    return notes.filter(n => n.deletedAt);
+  }
+
+  // 清除超过 30 天的已删除便签
+  async function purgeOldNotes() {
+    const now = Date.now();
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const toPurge = notes.filter(n => n.deletedAt && (now - new Date(n.deletedAt).getTime()) > THIRTY_DAYS);
+    for (const note of toPurge) {
+      await window.electronAPI.deleteNote(note.id);
+    }
+    if (toPurge.length > 0) {
+      notes = notes.filter(n => !toPurge.find(p => p.id === n.id));
+      notify();
+    }
   }
 
   async function setReminder(id, remindAt) {
@@ -78,5 +117,5 @@ const state = (() => {
     listeners.forEach(fn => fn(notes));
   }
 
-  return { init, getNotes, addNote, updateNote, deleteNote, setReminder, onReminderTriggeredFromMain, onChange };
+  return { init, getNotes, addNote, updateNote, deleteNote, restoreNote, permanentDeleteNote, getDeletedNotes, purgeOldNotes, setReminder, onReminderTriggeredFromMain, onChange };
 })();

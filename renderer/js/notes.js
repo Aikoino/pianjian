@@ -117,8 +117,15 @@ const notes = (() => {
   function getFiltered() {
     const allNotes = state.getNotes();
     const typeFilter = sidebar.getFilter();
+
+    // 回收站视图
+    if (typeFilter === 'trash') {
+      return allNotes.filter(n => n.deletedAt);
+    }
+
+    // 正常视图：排除已删除的
     return allNotes.filter(n => {
-      // 时间轴显示所有 timeline 条目（含已晋升的）
+      if (n.deletedAt) return false;
       if (typeFilter === 'timeline') {
         if (n.type !== 'timeline') return false;
       } else {
@@ -131,7 +138,7 @@ const notes = (() => {
 
   // 渲染键：涵盖所有影响卡片呈现的字段
   function renderKey(n) {
-    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}:${n.remindAt || ''}`;
+    return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}:${n.remindAt || ''}:${n.deletedAt || ''}`;
   }
 
   function init() {
@@ -172,24 +179,46 @@ const notes = (() => {
   function render() {
     const container = document.getElementById('notes-area');
     const filtered = getFiltered();
+    const isTrash = sidebar.getFilter() === 'trash';
 
     lastKeys = new Set(filtered.map(renderKey));
     container.innerHTML = '';
 
     if (filtered.length === 0) {
-      const msg = searchQuery
-        ? '没有匹配的便签'
-        : '暂无便签，点击 + 添加';
+      const msg = isTrash
+        ? '回收站是空的'
+        : searchQuery
+          ? '没有匹配的便签'
+          : '暂无便签，点击 + 添加';
       container.innerHTML = `
         <div class="notes-empty">
-          <span class="notes-empty__icon">&#x1F4DD;</span>
+          <span class="notes-empty__icon">${isTrash ? '&#x1F5D1;' : '&#x1F4DD;'}</span>
           <span>${msg}</span>
         </div>`;
       return;
     }
 
+    // 回收站：清空按钮
+    if (isTrash) {
+      const header = document.createElement('div');
+      header.className = 'trash-header';
+      header.innerHTML = `<span>${filtered.length} 个已删除便签（30天后自动清除）</span>`;
+      const purgeBtn = document.createElement('button');
+      purgeBtn.className = 'trash-purge-btn';
+      purgeBtn.textContent = '清空回收站';
+      purgeBtn.addEventListener('click', async () => {
+        if (confirm('确定清空回收站？所有便签将被彻底删除。')) {
+          for (const n of filtered) {
+            await state.permanentDeleteNote(n.id);
+          }
+        }
+      });
+      header.appendChild(purgeBtn);
+      container.appendChild(header);
+    }
+
     filtered.forEach(note => {
-      container.appendChild(createCard(note));
+      container.appendChild(isTrash ? createTrashCard(note) : createCard(note));
     });
   }
 
@@ -209,6 +238,53 @@ const notes = (() => {
       }
       return false;
     }
+
+  // 回收站卡片
+  function createTrashCard(note) {
+    const card = document.createElement('div');
+    card.className = 'note-card note-card--trash';
+    card.dataset.id = note.id;
+
+    const content = document.createElement('div');
+    content.className = 'note-card__trash-content';
+    const firstLine = stripMarkdown(note.content || '').split('\n')[0].trim() || '(无内容)';
+    content.textContent = firstLine;
+    card.appendChild(content);
+
+    const meta = document.createElement('div');
+    meta.className = 'note-card__trash-meta';
+    const delTime = new Date(note.deletedAt);
+    const pad = n => String(n).padStart(2, '0');
+    meta.textContent = `删除于 ${delTime.getMonth()+1}/${delTime.getDate()} ${pad(delTime.getHours())}:${pad(delTime.getMinutes())}`;
+    card.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'note-card__trash-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'note-card__trash-btn note-card__trash-btn--restore';
+    restoreBtn.textContent = '恢复';
+    restoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.restoreNote(note.id);
+    });
+
+    const permDelBtn = document.createElement('button');
+    permDelBtn.className = 'note-card__trash-btn note-card__trash-btn--delete';
+    permDelBtn.textContent = '彻底删除';
+    permDelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('确定彻底删除此便签？')) {
+        state.permanentDeleteNote(note.id);
+      }
+    });
+
+    actions.appendChild(restoreBtn);
+    actions.appendChild(permDelBtn);
+    card.appendChild(actions);
+
+    return card;
+  }
 
   function createCard(note) {
     const card = document.createElement('div');
@@ -505,6 +581,7 @@ const notes = (() => {
     });
 
     row.appendChild(toggleBtn);
+    metaRight.appendChild(delBtn);
     meta.appendChild(metaLeft);
     meta.appendChild(metaRight);
     card.appendChild(meta);

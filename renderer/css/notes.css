@@ -434,3 +434,77 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ---- 回收站 ---- */
+.trash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #999;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+}
+.trash-purge-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.trash-purge-btn:hover {
+  border-color: #f44336;
+  color: #f44336;
+}
+
+.note-card--trash {
+  opacity: 0.65;
+  transition: opacity 0.15s;
+}
+.note-card--trash:hover {
+  opacity: 1;
+}
+.note-card__trash-content {
+  font-size: 13px;
+  color: var(--color-text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-card__trash-meta {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 8px;
+}
+.note-card__trash-actions {
+  display: flex;
+  gap: 8px;
+}
+.note-card__trash-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.note-card__trash-btn--restore {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.note-card__trash-btn--restore:hover {
+  background: #c8e6c9;
+}
+.note-card__trash-btn--delete {
+  background: #fbe9e7;
+  color: #c62828;
+}
+.note-card__trash-btn--delete:hover {
+  background: #ffcdd2;
+}

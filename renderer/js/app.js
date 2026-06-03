@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   await state.init();
+  state.purgeOldNotes(); // 自动清理 30 天前的回收站便签
   sidebar.init();
   notes.init();
   initTitleBar();
@@ -44,9 +45,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.electronAPI.endResize();
   });
 
+  // ---- 应用更新检查 ----
+  const banner = document.getElementById('update-banner');
+  const updateText = document.getElementById('update-text');
+  const btnDownload = document.getElementById('btn-update-download');
+  const btnClose = document.getElementById('btn-update-close');
+
+  // 监听主进程推送的更新通知
+  window.electronAPI.onUpdateAvailable((info) => {
+    if (info.hasUpdate) {
+      updateText.textContent = `发现新版本 v${info.latestVersion}（当前 v${info.currentVersion}）`;
+      btnDownload.onclick = () => {
+        window.electronAPI.openExternal(info.downloadUrl);
+      };
+      banner.style.display = 'flex';
+    }
+  });
+
+  btnClose.onclick = () => {
+    banner.style.display = 'none';
+  };
+
   function updateHandleCounts() {
     const counts = { daily: 0, weekly: 0, normal: 0, timeline: 0 };
     state.getNotes().forEach(n => {
+      if (n.deletedAt) return; // 排除已删除的
       if (n.type === 'timeline') counts.timeline++;
       const effective = getEffectiveType(n);
       if (effective !== 'timeline') counts[effective]++;

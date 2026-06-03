@@ -76,10 +76,25 @@
 .sidebar__count--weekly   { background: var(--color-weekly-text); }
 .sidebar__count--normal   { background: var(--color-normal-text); }
 .sidebar__count--timeline { background: var(--color-timeline-text); }
+.sidebar__count--trash    { background: #999; }
 
 .sidebar__count:empty {
   display: none;
 }
+
+.sidebar__sep {
+  width: 24px;
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
+}
+
+.sidebar__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sidebar__tab--trash.sidebar__tab--active::before { background: #999; }
 
 /* ---- 内容区布局 ---- */
 .content-area {

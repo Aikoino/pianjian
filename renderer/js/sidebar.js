@@ -20,6 +20,23 @@ const sidebar = (() => {
       el.appendChild(tab);
     });
 
+    // 分隔线
+    const sep = document.createElement('div');
+    sep.className = 'sidebar__sep';
+    el.appendChild(sep);
+
+    // 回收站
+    const trashTab = document.createElement('button');
+    trashTab.className = 'sidebar__tab sidebar__tab--trash';
+    trashTab.dataset.type = 'trash';
+    trashTab.innerHTML = `
+      <span class="sidebar__icon">&#x1F5D1;</span>
+      <span class="sidebar__count sidebar__count--trash"></span>
+      <span>回收站</span>
+    `;
+    trashTab.addEventListener('click', () => setActive('trash'));
+    el.appendChild(trashTab);
+
     setActive(activeType);
     updateCounts();
 
@@ -38,15 +55,15 @@ const sidebar = (() => {
     const counts = {};
     const notes = state.getNotes();
     TYPES.forEach(t => { counts[t] = 0; });
+    counts.trash = 0;
     notes.forEach(n => {
-      // 时间轴始终计入所有 timeline 条目
+      if (n.deletedAt) { counts.trash++; return; }
       if (n.type === 'timeline') counts.timeline++;
-      // 晋升到 daily/weekly 的也同时计入对应分类
       const effective = getEffectiveType(n);
       if (effective !== 'timeline') counts[effective]++;
       else if (n.type !== 'timeline') counts[n.type]++;
     });
-    TYPES.forEach(type => {
+    TYPES.concat(['trash']).forEach(type => {
       const el = document.querySelector(`.sidebar__count--${type}`);
       if (el) el.textContent = counts[type] || '';
     });
