@@ -2,6 +2,118 @@ const notes = (() => {
   let lastKeys = new Set();
   let searchQuery = '';
 
+  // ---- Markdown 渲染 ----
+  function renderInline(text) {
+    let s = text;
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    s = s.replace(/_(.+?)_/g, '<em>$1</em>');
+    s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px">');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return s;
+  }
+
+  function stripInline(text) {
+    let s = text;
+    s = s.replace(/`([^`]+)`/g, '$1');
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
+    s = s.replace(/\*\*(.+?)\*\*/g, '$1');
+    s = s.replace(/__(.+?)__/g, '$1');
+    s = s.replace(/\*(.+?)\*/g, '$1');
+    s = s.replace(/_(.+?)_/g, '$1');
+    s = s.replace(/~~(.+?)~~/g, '$1');
+    s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    return s;
+  }
+
+  function renderMarkdown(content) {
+    if (!content) return '';
+    const lines = content.split('\n');
+    const html = [];
+    let inUl = false, inOl = false, inBq = false, inCode = false;
+
+    function closeLists() {
+      if (inUl) { html.push('</ul>'); inUl = false; }
+      if (inOl) { html.push('</ol>'); inOl = false; }
+    }
+    function closeBlockquote() { if (inBq) { html.push('</blockquote>'); inBq = false; } }
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // 围栏代码块
+      if (/^```/.test(line)) {
+        closeLists(); closeBlockquote();
+        if (inCode) { html.push('</code></pre>'); inCode = false; }
+        else { html.push('<pre><code>'); inCode = true; }
+        continue;
+      }
+      if (inCode) { html.push(line.replace(/</g, '&lt;').replace(/>/g, '&gt;')); continue; }
+
+      // 分割线
+      if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) {
+        closeLists(); closeBlockquote();
+        html.push('<hr>');
+        continue;
+      }
+
+      // 无序列表
+      if (/^[-*+]\s+/.test(line)) {
+        closeBlockquote();
+        if (!inOl && !inUl) { html.push('<ul>'); inUl = true; }
+        else if (inOl) { html.push('</ol>'); inOl = false; html.push('<ul>'); inUl = true; }
+        html.push('<li>' + renderInline(line.replace(/^[-*+]\s+/, '')) + '</li>');
+        continue;
+      }
+      // 有序列表
+      if (/^\d+\.\s+/.test(line)) {
+        closeBlockquote();
+        if (!inUl && !inOl) { html.push('<ol>'); inOl = true; }
+        else if (inUl) { html.push('</ul>'); inUl = false; html.push('<ol>'); inOl = true; }
+        html.push('<li>' + renderInline(line.replace(/^\d+\.\s+/, '')) + '</li>');
+        continue;
+      }
+
+      closeLists();
+
+      // 引用块
+      if (/^>\s?/.test(line)) {
+        if (!inBq) { html.push('<blockquote>'); inBq = true; }
+        html.push('<p>' + renderInline(line.replace(/^>\s?/, '')) + '</p>');
+        continue;
+      }
+      closeBlockquote();
+
+      // 标题
+      if (/^#{3}\s*\S/.test(line)) {
+        html.push('<h3>' + renderInline(line.replace(/^#{3}\s*/, '')) + '</h3>');
+      } else if (/^#{2}\s*\S/.test(line)) {
+        html.push('<h2>' + renderInline(line.replace(/^#{2}\s*/, '')) + '</h2>');
+      } else if (/^#\s*\S/.test(line)) {
+        html.push('<h1>' + renderInline(line.replace(/^#\s*/, '')) + '</h1>');
+      } else if (line === '') {
+        html.push('<br>');
+      } else {
+        html.push('<p>' + renderInline(line) + '</p>');
+      }
+    }
+    closeLists(); closeBlockquote();
+    if (inCode) html.push('</code></pre>');
+    return html.join('');
+  }
+
+  // 提取第一行作为摘要（去除 Markdown 标记）
+  function stripMarkdown(content) {
+    if (!content) return '';
+    const firstLine = content.split('\n')[0] || '';
+    return stripInline(firstLine.replace(/^#{1,3}\s*/, '').replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '')).trim();
+  }
+
   function getFiltered() {
     const allNotes = state.getNotes();
     const typeFilter = sidebar.getFilter();
@@ -90,18 +202,13 @@ const notes = (() => {
     sel.addRange(range);
   }
 
-  // 检测多行：兼容 textContent 的 \n 和 contentEditable 产生的 div/br 标签
-  function hasMultipleLines(source) {
-    if (typeof source === 'string') {
-      if (source.includes('\n')) return true;
-      if (/<(div|br|p)[^>]*>/i.test(source)) return true;
+    // 检测多行：基于原始 note.content（非 innerHTML）
+    function hasMultipleLines(content) {
+      if (typeof content === 'string') {
+        return content.includes('\n');
+      }
       return false;
     }
-    // DOM 元素：同时检查 textContent 和 innerHTML
-    if (source.textContent && source.textContent.includes('\n')) return true;
-    if (/<(div|br|p)[^>]*>/i.test(source.innerHTML || '')) return true;
-    return false;
-  }
 
   function createCard(note) {
     const card = document.createElement('div');
@@ -136,16 +243,20 @@ const notes = (() => {
     const summaryText = document.createElement('span');
     summaryText.className = 'note-card__summary-text';
 
-    const expandBtn = document.createElement('span');
-    expandBtn.className = 'note-card__summary-expand';
-    expandBtn.textContent = '展开';
+    const summaryExpandBtn = document.createElement('span');
+    summaryExpandBtn.className = 'note-card__toggle';
+    summaryExpandBtn.textContent = '展开';
+    summaryExpandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      expand();
+    });
 
     summary.appendChild(summaryCheck);
     summary.appendChild(summaryText);
-    summary.appendChild(expandBtn);
+    summary.appendChild(summaryExpandBtn);
 
     function updateSummary() {
-      const firstLine = (note.content || '').split('\n')[0].trim();
+      const firstLine = stripMarkdown(note.content || '').split('\n')[0].trim();
       summaryText.textContent = firstLine || '(无标题)';
     }
     updateSummary();
@@ -165,17 +276,81 @@ const notes = (() => {
 
     const body = document.createElement('div');
     body.className = 'note-card__body';
-    body.contentEditable = 'true';
-    body.textContent = note.content;
+
+    // 从 contenteditable innerHTML 正确提取纯文本（保留 <br> 换行）
+    function extractTextFromHtml(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      function walk(node) {
+        let r = '';
+        for (const c of node.childNodes) {
+          if (c.nodeType === 3) r += c.textContent;
+          else if (c.nodeType === 1) {
+            if (c.tagName === 'BR') r += '\n';
+            else if (['DIV', 'P'].includes(c.tagName)) {
+              if (r.length > 0 && !r.endsWith('\n')) r += '\n';
+              r += walk(c);
+            } else r += walk(c);
+          }
+        }
+        return r;
+      }
+      return walk(tmp);
+    }
+
+    let isEditing = false;
+
+    // 显示模式：渲染 Markdown HTML，不可编辑
+    function showDisplayMode() {
+      isEditing = false;
+      body.contentEditable = 'false';
+      body.innerHTML = renderMarkdown(note.content);
+      body.classList.remove('note-card__body--editing');
+    }
+
+    // 编辑模式：显示原始 Markdown，可编辑
+    function showEditMode() {
+      isEditing = true;
+      body.contentEditable = 'true';
+      body.textContent = note.content;
+      body.classList.add('note-card__body--editing');
+      body.focus();
+      placeCaretAtEnd(body);
+    }
+
+    // 从编辑模式退出，保存内容并切回显示模式
+    function exitEditMode() {
+      if (!isEditing) return;
+      const content = extractTextFromHtml(body.innerHTML);
+      note.content = content;
+      state.updateNote(note.id, { content });
+      showDisplayMode();
+    }
+
+    // 初始状态：显示模式
+    showDisplayMode();
+    if (shouldCollapse) {
+      toggleBtn.style.display = 'none';
+      summaryExpandBtn.style.display = '';
+    } else {
+      summaryExpandBtn.style.display = 'none';
+    }
 
     const saveDebounced = debounce(async () => {
-      const content = body.textContent;
-      // 更新 note.content 以便 renderKey 使用
+      const content = extractTextFromHtml(body.innerHTML);
       note.content = content;
       await state.updateNote(note.id, { content });
     }, 300);
 
     body.addEventListener('input', saveDebounced);
+
+    // body 点击：显示模式 → 编辑模式
+    body.addEventListener('click', (e) => {
+      if (!isEditing) {
+        e.stopPropagation();
+        showEditMode();
+      }
+    });
     row.appendChild(body);
     card.appendChild(row);
 
@@ -315,50 +490,75 @@ const notes = (() => {
       await state.deleteNote(note.id);
     });
 
-    metaRight.appendChild(delBtn);
+    // 收起/展开按钮（放在卡片右上角，紧邻内容）
+    const toggleBtn = document.createElement('span');
+    toggleBtn.className = 'note-card__toggle';
+    toggleBtn.textContent = shouldCollapse ? '展开' : '收起';
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (card.classList.contains('note-card--collapsed')) {
+        expand();
+      } else {
+        if (isEditing) exitEditMode();
+        tryCollapse();
+      }
+    });
+
+    row.appendChild(toggleBtn);
     meta.appendChild(metaLeft);
     meta.appendChild(metaRight);
     card.appendChild(meta);
 
     // ---- 折叠/展开交互 ----
 
-    // 摘要点击 → 展开
+    // 摘要点击 → 展开到显示模式
     summary.addEventListener('click', (e) => {
       e.stopPropagation();
       expand();
     });
 
-    // 折叠状态下点击卡片任何位置 → 展开
+    // 卡片点击：折叠→展开，显示→编辑（排除按钮区域）
     card.addEventListener('click', (e) => {
-      if (!card.classList.contains('note-card--collapsed')) return;
-      // 不拦截复选框和删除按钮
-      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder')) return;
-      expand();
+      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle')) return;
+
+      if (card.classList.contains('note-card--collapsed')) {
+        expand();
+      } else if (!isEditing) {
+        showEditMode();
+      }
     });
 
     function expand() {
       card.classList.remove('note-card--collapsed');
       note.collapsed = false;
-      body.focus();
-      placeCaretAtEnd(body);
+      showDisplayMode();
+      updateSummaryFromBody();
+      toggleBtn.textContent = '收起';
+      toggleBtn.style.display = '';
+      summaryExpandBtn.style.display = 'none';
     }
 
-    // 正文失焦 → 自动折叠（blur + focusout 双保险）
+    // 折叠多行便签
     function tryCollapse() {
-      if (!hasMultipleLines(body)) return;
+      if (!hasMultipleLines(note.content)) return;
       if (!card.classList.contains('note-card--collapsed')) {
         note.collapsed = true;
         updateSummaryFromBody();
         card.classList.add('note-card--collapsed');
+        toggleBtn.style.display = 'none';
+        summaryExpandBtn.style.display = '';
       }
     }
+
+    // 失焦 → 退出编辑模式
     body.addEventListener('focusout', (e) => {
-      // 焦点离开当前 card 时才折叠（避免点击 checkbox/删除 等内部元素误触发）
-      if (!card.contains(e.relatedTarget)) tryCollapse();
+      if (isEditing && !card.contains(e.relatedTarget)) {
+        exitEditMode();
+      }
     });
 
     function updateSummaryFromBody() {
-      const firstLine = (body.textContent || '').split('\n')[0].trim();
+      const firstLine = stripMarkdown(note.content || '').split('\n')[0].trim();
       summaryText.textContent = firstLine || '(无标题)';
     }
 
@@ -366,7 +566,7 @@ const notes = (() => {
     card.insertBefore(summary, card.firstChild);
 
     if (!note.content) {
-      setTimeout(() => body.focus(), 50);
+      setTimeout(() => enterEditMode(), 50);
     }
 
     return card;

@@ -72,10 +72,86 @@
   line-height: 1.6;
   min-height: 20px;
   outline: none;
-  white-space: pre-wrap;
   word-break: break-word;
   color: var(--color-text);
   flex: 1;
+}
+
+/* 始终保持 pre-wrap 以显示换行 */
+.note-card__body {
+  white-space: pre-wrap;
+}
+
+/* 显示模式：Markdown 元素样式 */
+.note-card__body strong { font-weight: 600; }
+.note-card__body em { font-style: italic; }
+.note-card__body del { opacity: 0.5; }
+.note-card__body code {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  padding: 0 3px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+.note-card__body a {
+  color: #1a73e8;
+  text-decoration: underline;
+}
+.note-card__body a:hover { opacity: 0.8; }
+.note-card__body h1 { font-size: 16px; font-weight: 700; margin: 6px 0 4px; }
+.note-card__body h2 { font-size: 15px; font-weight: 600; margin: 5px 0 3px; }
+.note-card__body h3 { font-size: 14px; font-weight: 600; margin: 4px 0 2px; }
+.note-card__body ul, .note-card__body ol {
+  padding-left: 20px;
+  margin: 4px 0;
+  list-style-position: outside;
+}
+.note-card__body li { margin: 2px 0; }
+.note-card__body p { margin: 3px 0; }
+.note-card__body blockquote {
+  border-left: 3px solid #ccc;
+  padding-left: 10px;
+  margin: 6px 0;
+  color: #666;
+}
+.note-card__body pre {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+.note-card__body pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.note-card__body hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 8px 0;
+}
+.note-card__body img {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+/* 收起/展开按钮 */
+.note-card__toggle {
+  font-size: 12px;
+  color: var(--color-text-muted, #999);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+}
+.note-card__toggle:hover {
+  color: var(--color-text, #333);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .note-card__body:empty::before {
