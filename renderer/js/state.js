@@ -93,6 +93,12 @@ const state = (() => {
     const note = notes.find(n => n.id === id);
     if (note) {
       note.remindAt = remindAt;
+      if (!remindAt) {
+        // 取消提醒时清除重复字段
+        note.reminderRepeat = undefined;
+        note.reminderRepeatDays = undefined;
+        note.reminderRepeatInterval = undefined;
+      }
       note.updatedAt = new Date().toISOString();
     }
     notify();

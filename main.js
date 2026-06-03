@@ -42,6 +42,50 @@ function stopReminderCheck() {
   }
 }
 
+function getNextRemindTime(note) {
+  const repeat = note.reminderRepeat || 'none';
+  if (repeat === 'none') return undefined;
+
+  const base = new Date(note.remindAt);
+  let next;
+
+  switch (repeat) {
+    case 'daily':
+      next = new Date(base.getTime() + 24 * 60 * 60 * 1000);
+      break;
+    case 'weekly': {
+      const days = note.reminderRepeatDays || [];
+      if (days.length === 0) return undefined;
+      next = new Date(base);
+      for (let i = 1; i <= 7; i++) {
+        next.setDate(next.getDate() + 1);
+        if (days.includes(next.getDay())) break;
+      }
+      break;
+    }
+    case 'monthly': {
+      next = new Date(base);
+      const targetDay = note.reminderRepeatDay || base.getDate();
+      next.setMonth(next.getMonth() + 1);
+      next.setDate(Math.min(targetDay, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()));
+      break;
+    }
+    case 'yearly': {
+      next = new Date(base);
+      next.setFullYear(next.getFullYear() + 1);
+      break;
+    }
+    case 'custom': {
+      const days = note.reminderRepeatInterval || 1;
+      next = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+      break;
+    }
+    default:
+      return undefined;
+  }
+  return next.toISOString();
+}
+
 function checkReminders() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const notes = loadNotes();
@@ -51,18 +95,17 @@ function checkReminders() {
 
   notes.forEach(note => {
     if (!note.remindAt) return;
-    // 仅 daily、weekly 和 timeline 类型触发提醒
     if (note.type !== 'daily' && note.type !== 'weekly' && note.type !== 'timeline') return;
     try {
       const remindTime = new Date(note.remindAt);
       if (remindTime <= now) {
         triggered.push(note);
-        note.remindAt = undefined;
+        // 计算下次提醒时间（重复提醒）或清空（单次提醒）
+        note.remindAt = getNextRemindTime(note);
         note.updatedAt = new Date().toISOString();
         modified = true;
       }
     } catch (e) {
-      // 日期解析异常，清除坏数据
       console.error('提醒时间解析失败:', note.remindAt, e);
       note.remindAt = undefined;
       note.updatedAt = new Date().toISOString();

@@ -194,6 +194,15 @@ const notes = (() => {
 
   function render() {
     const container = document.getElementById('notes-area');
+    try {
+      renderInner(container);
+    } catch (e) {
+      console.error('渲染错误:', e);
+      container.innerHTML = `<div class="notes-empty"><span style="color:red">渲染出错: ${e.message}</span></div>`;
+    }
+  }
+
+  function renderInner(container) {
     const filtered = getFiltered();
     const isTrash = sidebar.getFilter() === 'trash';
 
@@ -419,6 +428,22 @@ const notes = (() => {
       showDisplayMode();
     }
 
+    // 收起/展开按钮（放在卡片右上角，紧邻内容）
+    const toggleBtn = document.createElement('span');
+    toggleBtn.className = 'note-card__toggle';
+    toggleBtn.textContent = shouldCollapse ? '展开' : '收起';
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (card.classList.contains('note-card--collapsed')) {
+        expand();
+      } else {
+        if (isEditing) exitEditMode();
+        tryCollapse();
+      }
+    });
+
+    row.appendChild(toggleBtn);
+
     // 初始状态：显示模式
     showDisplayMode();
     if (shouldCollapse) {
@@ -480,7 +505,15 @@ const notes = (() => {
         bellBtn.classList.add('active');
         const d = new Date(note.remindAt);
         const pad = n => String(n).padStart(2, '0');
-        bellBtn.title = `提醒: ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const repeat = note.reminderRepeat || 'none';
+        const repeatLabels = { none: '', daily: ' 每天', weekly: ' 每周', monthly: ' 每月', yearly: ' 每年' };
+        let repeatStr = repeatLabels[repeat] || '';
+        if (repeat === 'custom') repeatStr = ` 每${note.reminderRepeatInterval || 1}天`;
+        if (repeat === 'weekly' && note.reminderRepeatDays) {
+          const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+          repeatStr = ' 每周' + note.reminderRepeatDays.map(d => dayLabels[d]).join('/');
+        }
+        bellBtn.title = `提醒: ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}${repeatStr}`;
       } else {
         bellBtn.title = '设置提醒';
       }
@@ -508,6 +541,77 @@ const notes = (() => {
         timeInput.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       }
 
+      // 重复选择
+      const repeatRow = document.createElement('div');
+      repeatRow.className = 'note-card__reminder-repeat';
+
+      const repeatLabel = document.createElement('span');
+      repeatLabel.className = 'note-card__reminder-repeat-label';
+      repeatLabel.textContent = '重复';
+
+      const repeatSelect = document.createElement('select');
+      repeatSelect.className = 'note-card__reminder-repeat-select';
+      ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'].forEach(val => {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = { none: '不重复', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', custom: '自定义' }[val];
+        repeatSelect.appendChild(opt);
+      });
+      repeatSelect.value = note.reminderRepeat || 'none';
+
+      // 每周：星期选择（默认显示/隐藏）
+      const weekDaysRow = document.createElement('div');
+      weekDaysRow.className = 'note-card__reminder-weekdays';
+      weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
+      const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+      const weekChecks = [];
+      WEEK_LABELS.forEach((label, i) => {
+        const lbl = document.createElement('label');
+        lbl.className = 'note-card__reminder-weekday';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = i;
+        cb.checked = (note.reminderRepeatDays || []).includes(i);
+        cb.addEventListener('click', e => e.stopPropagation());
+        weekChecks.push(cb);
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(label));
+        lbl.addEventListener('click', e => {
+          e.stopPropagation();
+          cb.checked = !cb.checked;
+        });
+        weekDaysRow.appendChild(lbl);
+      });
+
+      // 自定义间隔（默认显示/隐藏）
+      const customRow = document.createElement('div');
+      customRow.className = 'note-card__reminder-custom';
+      customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
+      const customInput = document.createElement('input');
+      customInput.type = 'number';
+      customInput.min = '1';
+      customInput.max = '365';
+      customInput.value = note.reminderRepeatInterval || 1;
+      customInput.className = 'note-card__reminder-custom-input';
+      const customUnit = document.createElement('span');
+      customUnit.textContent = '天';
+      customRow.appendChild(customInput);
+      customRow.appendChild(customUnit);
+
+      // 重复选择切换
+      repeatSelect.addEventListener('change', () => {
+        weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
+        customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
+      });
+
+      repeatRow.appendChild(repeatLabel);
+      repeatRow.appendChild(repeatSelect);
+      popup.appendChild(dateInput);
+      popup.appendChild(timeInput);
+      popup.appendChild(repeatRow);
+      popup.appendChild(weekDaysRow);
+      popup.appendChild(customRow);
+
       // 操作按钮行
       const popupRow = document.createElement('div');
       popupRow.className = 'note-card__reminder-popup-row';
@@ -522,7 +626,21 @@ const notes = (() => {
           const [y, m, d] = dateInput.value.split('-').map(Number);
           const [hours, minutes] = timeInput.value.split(':').map(Number);
           const remindAt = new Date(y, m - 1, d, hours, minutes).toISOString();
-          await state.setReminder(note.id, remindAt);
+          const repeat = repeatSelect.value;
+          const changes = { remindAt };
+          if (repeat !== 'none') {
+            changes.reminderRepeat = repeat;
+            if (repeat === 'weekly') {
+              changes.reminderRepeatDays = weekChecks.filter(cb => cb.checked).map(cb => Number(cb.value));
+            } else if (repeat === 'custom') {
+              changes.reminderRepeatInterval = Number(customInput.value) || 1;
+            }
+          } else {
+            changes.reminderRepeat = 'none';
+            changes.reminderRepeatDays = undefined;
+            changes.reminderRepeatInterval = undefined;
+          }
+          await state.updateNote(note.id, changes);
           popup.classList.remove('visible');
         }
       });
@@ -541,8 +659,6 @@ const notes = (() => {
         popupRow.appendChild(cancelReminderBtn);
       }
 
-      popup.appendChild(dateInput);
-      popup.appendChild(timeInput);
       popup.appendChild(popupRow);
 
       // 铃铛点击切换弹窗
@@ -552,11 +668,13 @@ const notes = (() => {
         document.querySelectorAll('.note-card__reminder-popup.visible').forEach(p => {
           if (p !== popup) p.classList.remove('visible');
         });
-        // 智能定位：下方优先，上方不够则向下
+        // 智能定位：向右弹出，下方优先
         const rect = bellBtn.getBoundingClientRect();
         const spaceAbove = rect.top;
         const spaceBelow = window.innerHeight - rect.bottom;
-        popup.style.right = (window.innerWidth - rect.right) + 'px';
+        const spaceRight = window.innerWidth - rect.right;
+        popup.style.left = spaceRight >= 200 ? (rect.right + 4) + 'px' : (rect.left - 200) + 'px';
+        popup.style.right = 'auto';
         popup.style.top = 'auto';
         popup.style.bottom = 'auto';
         if (spaceBelow >= 140) {
@@ -570,7 +688,7 @@ const notes = (() => {
       });
 
       reminderEl.appendChild(bellBtn);
-      reminderEl.appendChild(popup);
+      document.body.appendChild(popup);
       metaLeft.appendChild(reminderEl);
     }
 
@@ -582,21 +700,6 @@ const notes = (() => {
       await state.deleteNote(note.id);
     });
 
-    // 收起/展开按钮（放在卡片右上角，紧邻内容）
-    const toggleBtn = document.createElement('span');
-    toggleBtn.className = 'note-card__toggle';
-    toggleBtn.textContent = shouldCollapse ? '展开' : '收起';
-    toggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (card.classList.contains('note-card--collapsed')) {
-        expand();
-      } else {
-        if (isEditing) exitEditMode();
-        tryCollapse();
-      }
-    });
-
-    row.appendChild(toggleBtn);
     metaRight.appendChild(delBtn);
     meta.appendChild(metaLeft);
     meta.appendChild(metaRight);
@@ -610,9 +713,9 @@ const notes = (() => {
       expand();
     });
 
-    // 卡片点击：折叠→展开，显示→编辑（排除按钮和链接）
+    // 卡片点击：折叠→展开，显示→编辑（排除按钮、链接和弹窗）
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle, a')) return;
+      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle, a, .note-card__reminder-popup')) return;
 
       if (card.classList.contains('note-card--collapsed')) {
         expand();

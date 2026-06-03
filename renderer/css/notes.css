@@ -363,8 +363,8 @@
   z-index: 1000;
   flex-direction: column;
   gap: 6px;
-  white-space: nowrap;
   align-items: stretch;
+  min-width: 180px;
 }
 
 .note-card__reminder-popup.visible {
@@ -428,6 +428,61 @@
 .note-card--reminder-flash {
   animation: reminderFlash 0.5s ease-in-out 3;
   box-shadow: 0 0 12px var(--color-accent);
+}
+
+/* 重复提醒 */
+.note-card__reminder-repeat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.note-card__reminder-repeat-label {
+  font-size: 11px;
+  color: #666;
+  flex-shrink: 0;
+}
+.note-card__reminder-repeat-select {
+  flex: 1;
+  font-size: 11px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: #fff;
+  color: #333;
+  outline: none;
+}
+.note-card__reminder-weekdays {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+.note-card__reminder-weekday {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  color: #666;
+  cursor: pointer;
+}
+.note-card__reminder-weekday input { margin: 0; }
+.note-card__reminder-custom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0;
+  font-size: 11px;
+  color: #666;
+}
+.note-card__reminder-custom-input {
+  width: 45px;
+  font-size: 11px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px 4px;
+  text-align: center;
+  outline: none;
 }
 
 @keyframes reminderFlash {
