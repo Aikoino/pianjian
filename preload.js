@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addNote: (note) => ipcRenderer.invoke('notes:add', note),
   updateNote: (id, changes) => ipcRenderer.invoke('notes:update', id, changes),
   deleteNote: (id) => ipcRenderer.invoke('notes:delete', id),
+  saveAllNotes: (notes) => ipcRenderer.invoke('notes:saveAll', notes),
 
   // 提醒
   setReminder: (id, remindAt) => ipcRenderer.invoke('notes:setReminder', id, remindAt),

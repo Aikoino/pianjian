@@ -1,5 +1,5 @@
 const notes = (() => {
-  let lastKeys = new Set();
+  let lastIds = [];
   let searchQuery = '';
 
   // ---- Markdown 渲染 ----
@@ -159,8 +159,8 @@ const notes = (() => {
 
   function init() {
     state.onChange(() => {
-      const currentKeys = new Set(getFiltered().map(renderKey));
-      if (!setsEqual(lastKeys, currentKeys)) render();
+      const currentIds = getFiltered().map(n => n.id);
+      if (JSON.stringify(lastIds) !== JSON.stringify(currentIds)) render();
     });
     sidebar.onFilterChange(() => render());
 
@@ -206,7 +206,7 @@ const notes = (() => {
     const filtered = getFiltered();
     const isTrash = sidebar.getFilter() === 'trash';
 
-    lastKeys = new Set(filtered.map(renderKey));
+    lastIds = filtered.map(n => n.id);
     container.innerHTML = '';
 
     if (filtered.length === 0) {
@@ -245,6 +245,28 @@ const notes = (() => {
     filtered.forEach(note => {
       container.appendChild(isTrash ? createTrashCard(note) : createCard(note));
     });
+
+    // 尾部拖放区域（允许拖到列表末尾）
+    if (!isTrash && sidebar.getFilter() === 'normal') {
+      const trailingZone = document.createElement('div');
+      trailingZone.className = 'note-card__trailing-zone';
+      trailingZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        trailingZone.classList.add('note-card--drag-over-bottom');
+      });
+      trailingZone.addEventListener('dragleave', () => {
+        trailingZone.classList.remove('note-card--drag-over-bottom');
+      });
+      trailingZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        trailingZone.classList.remove('note-card--drag-over-bottom');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (draggedId) {
+          state.reorderNotes(draggedId, null, 'end');
+        }
+      });
+      container.appendChild(trailingZone);
+    }
   }
 
   function placeCaretAtEnd(el) {
@@ -327,6 +349,53 @@ const notes = (() => {
       shouldCollapse ? 'note-card--collapsed' : ''
     ].filter(Boolean).join(' ');
     card.dataset.id = note.id;
+
+    // 拖拽排序（仅普通便签，通过左侧拖拽手柄）
+    if (effectiveType === 'normal' && !note.completed) {
+      card.draggable = true;
+      const dragHandle = document.createElement('span');
+      dragHandle.className = 'note-card__drag-handle';
+      dragHandle.textContent = '⋮';
+      dragHandle.title = '拖拽排序';
+      card.insertBefore(dragHandle, card.firstChild);
+
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', note.id);
+        card.classList.add('note-card--dragging');
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('note-card--dragging');
+        document.querySelectorAll('.note-card--drag-over').forEach(c => c.classList.remove('note-card--drag-over'));
+      });
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const draggedId = e.dataTransfer.types.includes('text/plain') && e.dataTransfer.getData('text/plain');
+        if (draggedId && draggedId !== note.id) {
+          const rect = card.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          card.classList.remove('note-card--drag-over-top', 'note-card--drag-over-bottom');
+          if (e.clientY < midY) {
+            card.classList.add('note-card--drag-over-top');
+          } else {
+            card.classList.add('note-card--drag-over-bottom');
+          }
+        }
+      });
+      card.addEventListener('dragleave', () => {
+        card.classList.remove('note-card--drag-over-top', 'note-card--drag-over-bottom');
+      });
+      card.addEventListener('drop', (e) => {
+        e.preventDefault();
+        card.classList.remove('note-card--drag-over-top', 'note-card--drag-over-bottom');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (draggedId && draggedId !== note.id) {
+          const rect = card.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          const position = e.clientY < midY ? 'before' : 'after';
+          state.reorderNotes(draggedId, note.id, position);
+        }
+      });
+    }
 
     // ---- 折叠摘要 ----
     const summary = document.createElement('div');
@@ -441,8 +510,6 @@ const notes = (() => {
         tryCollapse();
       }
     });
-
-    row.appendChild(toggleBtn);
 
     // 初始状态：显示模式
     showDisplayMode();
@@ -700,6 +767,7 @@ const notes = (() => {
       await state.deleteNote(note.id);
     });
 
+    metaRight.appendChild(toggleBtn);
     metaRight.appendChild(delBtn);
     meta.appendChild(metaLeft);
     meta.appendChild(metaRight);
@@ -715,7 +783,7 @@ const notes = (() => {
 
     // 卡片点击：折叠→展开，显示→编辑（排除按钮、链接和弹窗）
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle, a, .note-card__reminder-popup')) return;
+      if (e.target.closest('.note-card__check, .note-card__delete, .note-card__reminder, .note-card__toggle, a, .note-card__reminder-popup, .note-card__drag-handle')) return;
 
       if (card.classList.contains('note-card--collapsed')) {
         expand();

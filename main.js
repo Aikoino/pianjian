@@ -209,6 +209,14 @@ function createWindow() {
     if (snapState && snapState.isShowing) hideWindow();
   });
 
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      scheduleSaveBounds();
+      mainWindow.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     stopHoverPoll();
     stopResizePoll();
@@ -237,6 +245,10 @@ function createTray() {
         } else {
           mainWindow.show();
           mainWindow.focus();
+          // 贴边状态下显示到可见位置
+          if (snapState && !snapState.isShowing) {
+            showWindow();
+          }
         }
       }
     },
@@ -259,6 +271,9 @@ function createTray() {
     } else {
       mainWindow.show();
       mainWindow.focus();
+      if (snapState && !snapState.isShowing) {
+        showWindow();
+      }
     }
   });
 }
@@ -640,6 +655,10 @@ ipcMain.handle('notes:delete', (_event, id) => {
   notes = notes.filter(n => n.id !== id);
   saveNotes(notes);
   syncManager.broadcast({ type: 'note_delete', id });
+});
+
+ipcMain.handle('notes:saveAll', (_event, orderedNotes) => {
+  saveNotes(orderedNotes);
 });
 
 ipcMain.handle('notes:setReminder', (_event, id, remindAt) => {

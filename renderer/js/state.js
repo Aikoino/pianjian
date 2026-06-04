@@ -88,6 +88,24 @@ const state = (() => {
     }
   }
 
+  // 拖拽排序：将 noteId 移动到 targetId 之前/之后，或末尾
+  function reorderNotes(noteId, targetId, position) {
+    const fromIdx = notes.findIndex(n => n.id === noteId);
+    if (fromIdx === -1) return;
+    const [moved] = notes.splice(fromIdx, 1);
+    if (position === 'end' || targetId === null) {
+      notes.push(moved);
+    } else {
+      let toIdx = notes.findIndex(n => n.id === targetId);
+      if (toIdx === -1) toIdx = notes.length;
+      if (position === 'after') toIdx++;
+      notes.splice(toIdx, 0, moved);
+    }
+    // 持久化新顺序
+    window.electronAPI.saveAllNotes(notes);
+    notify();
+  }
+
   async function setReminder(id, remindAt) {
     await window.electronAPI.setReminder(id, remindAt);
     const note = notes.find(n => n.id === id);
@@ -123,5 +141,5 @@ const state = (() => {
     listeners.forEach(fn => fn(notes));
   }
 
-  return { init, getNotes, addNote, updateNote, deleteNote, restoreNote, permanentDeleteNote, getDeletedNotes, purgeOldNotes, setReminder, onReminderTriggeredFromMain, onChange };
+  return { init, getNotes, addNote, updateNote, deleteNote, restoreNote, permanentDeleteNote, getDeletedNotes, purgeOldNotes, reorderNotes, setReminder, onReminderTriggeredFromMain, onChange };
 })();

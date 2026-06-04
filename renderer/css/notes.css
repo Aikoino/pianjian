@@ -269,6 +269,52 @@
   cursor: pointer;
 }
 
+/* 拖拽排序样式 */
+.note-card--dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.note-card--drag-over-top {
+  border-top: 3px solid var(--color-accent, #1a73e8);
+  margin-top: -3px;
+}
+
+.note-card--drag-over-bottom {
+  border-bottom: 3px solid var(--color-accent, #1a73e8);
+  margin-bottom: -3px;
+}
+
+.note-card__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  cursor: grab;
+  color: #ccc;
+  font-size: 16px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.note-card__drag-handle:hover {
+  color: #999;
+}
+
+.note-card__drag-handle:active {
+  cursor: grabbing;
+}
+
+.note-card__trailing-zone {
+  min-height: 30px;
+  transition: border 0.15s;
+}
+
+.note-card__trailing-zone.note-card--drag-over-bottom {
+  border-bottom: 3px solid var(--color-accent, #1a73e8);
+}
+
 .note-card__summary-text {
   flex: 1;
   overflow: hidden;
