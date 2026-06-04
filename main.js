@@ -264,7 +264,7 @@ function createTray() {
 }
 
 // ---- 贴边隐藏 ----
-const SNAP = 20;
+const SNAP = 50;
 const HANDLE_VISIBLE = 26;
 const HOVER_DELAY = 500;
 const LEAVE_DELAY = 800;
@@ -316,13 +316,17 @@ function setupSnap() {
       const refX = snapState.isShowing ? snapState.visibleX : snapState.hiddenX;
       const refY = snapState.isShowing ? snapState.visibleY : snapState.hiddenY;
       const dist = Math.abs(bounds.x - refX) + Math.abs(bounds.y - refY);
+      console.log(`[snap] 拖拽取消检测: dist=${dist} threshold=${UNSNAP_DISTANCE}`);
       if (dist > UNSNAP_DISTANCE) {
         unsnap();
       }
       return;
     }
 
-    if (unsnapCooldown) return;
+    if (unsnapCooldown) {
+      console.log('[snap] 冷却中，跳过');
+      return;
+    }
 
     clearTimeout(snapPending);
     snapPending = null;
@@ -333,11 +337,15 @@ function setupSnap() {
     const distToLeft = bounds.x - wx;
     const distToRight = (wx + ww) - (bounds.x + bounds.width);
 
+    console.log(`[snap] 检测边缘: distToLeft=${distToLeft} distToRight=${distToRight} SNAP=${SNAP}`);
+
     let edge = null;
-    if (Math.abs(distToLeft) <= SNAP) edge = 'left';
-    else if (Math.abs(distToRight) <= SNAP) edge = 'right';
+    // 窗口在边缘 20px 范围内，或超出屏幕边缘，都视为在边缘
+    if (distToLeft <= SNAP || distToLeft < 0) edge = 'left';
+    else if (distToRight <= SNAP || distToRight < 0) edge = 'right';
 
     if (edge) {
+      console.log(`[snap] 检测到边缘: edge=${edge} moveCount=${moveCountAfterEdge}`);
       const now = Date.now();
       if (now - lastMoveTime > 100) {
         // 超过 100ms 没有 move 事件 → 认为新一轮拖拽开始
