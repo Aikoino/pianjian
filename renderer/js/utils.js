@@ -33,3 +33,16 @@ function getEffectiveType(note) {
   if (custom >= monday && custom <= sunday) return 'weekly';
   return 'timeline';
 }
+
+// 统计各类便签数量（含回收站）
+function computeNoteCounts(notes) {
+  const counts = { daily: 0, weekly: 0, normal: 0, timeline: 0, trash: 0 };
+  notes.forEach(n => {
+    if (n.deletedAt) { counts.trash++; return; }
+    if (n.type === 'timeline') counts.timeline++;
+    const effective = getEffectiveType(n);
+    if (effective !== 'timeline') counts[effective]++;
+    else if (n.type !== 'timeline') counts[n.type]++;
+  });
+  return counts;
+}

@@ -67,14 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   function updateHandleCounts() {
-    const counts = { daily: 0, weekly: 0, normal: 0, timeline: 0 };
-    state.getNotes().forEach(n => {
-      if (n.deletedAt) return; // 排除已删除的
-      if (n.type === 'timeline') counts.timeline++;
-      const effective = getEffectiveType(n);
-      if (effective !== 'timeline') counts[effective]++;
-      else if (n.type !== 'timeline') counts[n.type]++;
-    });
+    const counts = computeNoteCounts(state.getNotes());
     ['daily', 'weekly', 'normal', 'timeline'].forEach(type => {
       const el = document.querySelector(`.snap-handle__count--${type}`);
       if (el) el.textContent = counts[type] || '';

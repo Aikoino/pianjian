@@ -17,7 +17,7 @@ if (global.__PIANJIAN_DATA_OVERRIDE) {
   console.log('[sync] 使用默认 appData 目录:', require('electron').app.getPath('appData'));
 }
 const { exec } = require('child_process');
-const { loadNotes, saveNotes } = require('./server/data-store');
+const { loadNotes, saveNotes, flushNotes } = require('./server/data-store');
 const { getCloseAction, setCloseAction, getWindowBounds, setWindowBounds, getSnapState, setSnapState, clearSnapState, getIsPinned, setIsPinned } = require('./server/config-store');
 const syncManager = require('./server/sync-manager');
 
@@ -178,6 +178,7 @@ function createWindow() {
     frame: false,
     transparent: true,
     resizable: true,
+    skipTaskbar: true,
     minWidth: 200,
     minHeight: 300,
     icon: path.join(__dirname, 'build', 'icon.png'),
@@ -207,6 +208,7 @@ function createWindow() {
 
   mainWindow.on('blur', () => {
     if (snapState && snapState.isShowing) hideWindow();
+    // 贴边隐藏时：轮询暂停由 app 级别焦点检测控制
   });
 
   mainWindow.on('close', (e) => {
@@ -292,6 +294,7 @@ let unsnapCooldown = false;
 let hoverPoll = null;
 let hoverStart = 0;
 let leaveStart = 0;
+let appFocused = true;       // 应用级焦点追踪
 
 // ---- 自由 resize ----
 let isResizing = false;
@@ -461,6 +464,9 @@ function startHoverPoll() {
   leaveStart = 0;
   hoverPoll = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed() || !snapState) { stopHoverPoll(); return; }
+
+    // 应用不在前台时跳过光标检测，节省 CPU
+    if (!appFocused) return;
 
     const cursor = screen.getCursorScreenPoint();
     const bounds = mainWindow.getBounds();
@@ -756,6 +762,18 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
+  // 应用级焦点追踪：非前台时跳过 hover 轮询的光标检测
+  app.on('browser-window-focus', () => {
+    appFocused = true;
+    // 焦点恢复时重启轮询（如果处于贴边隐藏状态）
+    if (snapState && !snapState.isShowing && hoverPoll) {
+      startHoverPoll();
+    }
+  });
+  app.on('browser-window-blur', () => {
+    appFocused = false;
+  });
+
   // 恢复贴边状态（校验坐标在当前屏幕内，否则忽略）
   const savedSnap = getSnapState();
   if (savedSnap) {
@@ -815,6 +833,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   stopReminderCheck();
+  flushNotes(); // 确保异步写入的数据落盘
   // 退出前保存最终窗口位置（贴边状态不保存隐藏坐标）
   if (mainWindow && !mainWindow.isDestroyed() && !snapState) {
     const bounds = mainWindow.getBounds();

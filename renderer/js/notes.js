@@ -1,5 +1,5 @@
 const notes = (() => {
-  let lastIds = [];
+  let lastRendered = new Map(); // id → { key, element }
   let searchQuery = '';
 
   // ---- Markdown 渲染 ----
@@ -159,8 +159,20 @@ const notes = (() => {
 
   function init() {
     state.onChange(() => {
-      const currentIds = getFiltered().map(n => n.id);
-      if (JSON.stringify(lastIds) !== JSON.stringify(currentIds)) render();
+      const filtered = getFiltered();
+      let changed = false;
+      if (filtered.length !== lastRendered.size) {
+        changed = true;
+      } else {
+        for (const note of filtered) {
+          const prev = lastRendered.get(note.id);
+          if (!prev || prev.key !== renderKey(note)) {
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (changed) render();
     });
     sidebar.onFilterChange(() => render());
 
@@ -206,10 +218,12 @@ const notes = (() => {
     const filtered = getFiltered();
     const isTrash = sidebar.getFilter() === 'trash';
 
-    lastIds = filtered.map(n => n.id);
-    container.innerHTML = '';
+    // 清理上一次渲染遗留的提醒弹窗（挂在 document.body 上）
+    document.querySelectorAll('.note-card__reminder-popup').forEach(el => el.remove());
 
     if (filtered.length === 0) {
+      lastRendered.clear();
+      container.innerHTML = '';
       const msg = isTrash
         ? '回收站是空的'
         : searchQuery
@@ -223,8 +237,10 @@ const notes = (() => {
       return;
     }
 
-    // 回收站：清空按钮
+    // 回收站：全量重建（简单场景，不需要 diff）
     if (isTrash) {
+      lastRendered.clear();
+      container.innerHTML = '';
       const header = document.createElement('div');
       header.className = 'trash-header';
       header.innerHTML = `<span>${filtered.length} 个已删除便签（30天后自动清除）</span>`;
@@ -240,14 +256,56 @@ const notes = (() => {
       });
       header.appendChild(purgeBtn);
       container.appendChild(header);
+      filtered.forEach(note => {
+        container.appendChild(createTrashCard(note));
+      });
+      return;
     }
 
-    filtered.forEach(note => {
-      container.appendChild(isTrash ? createTrashCard(note) : createCard(note));
-    });
+    // ---- Diff 模式：复用未变化的卡片 ----
+    const newRendered = new Map();
+    const newIds = new Set(filtered.map(n => n.id));
 
-    // 尾部拖放区域（允许拖到列表末尾）
-    if (!isTrash && sidebar.getFilter() === 'normal') {
+    // 1. 复用或重建卡片
+    const cards = [];
+    for (const note of filtered) {
+      const key = renderKey(note);
+      const prev = lastRendered.get(note.id);
+      if (prev && prev.key === key) {
+        // renderKey 未变，复用已有 DOM
+        newRendered.set(note.id, prev);
+        cards.push(prev.element);
+      } else {
+        // renderKey 变化或新便签，重建卡片
+        const el = createCard(note);
+        newRendered.set(note.id, { key, element: el });
+        cards.push(el);
+      }
+    }
+
+    // 2. 移除不再显示的卡片及其弹窗
+    for (const [id, entry] of lastRendered) {
+      if (!newIds.has(id)) {
+        entry.element.remove();
+      }
+    }
+
+    // 3. 按正确顺序排列卡片到容器
+    // 先移除尾部拖放区域（稍后重建）
+    const oldTrailing = container.querySelector('.note-card__trailing-zone');
+    if (oldTrailing) oldTrailing.remove();
+
+    // 逐个检查并调整 DOM 顺序
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const ref = container.children[i];
+      if (ref !== card) {
+        container.insertBefore(card, ref || null);
+      }
+    }
+
+    // 4. 尾部拖放区域（普通便签视图）
+    if (sidebar.getFilter() === 'normal') {
       const trailingZone = document.createElement('div');
       trailingZone.className = 'note-card__trailing-zone';
       trailingZone.addEventListener('dragover', (e) => {
@@ -267,6 +325,8 @@ const notes = (() => {
       });
       container.appendChild(trailingZone);
     }
+
+    lastRendered = newRendered;
   }
 
   function placeCaretAtEnd(el) {

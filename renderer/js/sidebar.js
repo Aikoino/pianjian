@@ -52,17 +52,7 @@ const sidebar = (() => {
   }
 
   function updateCounts() {
-    const counts = {};
-    const notes = state.getNotes();
-    TYPES.forEach(t => { counts[t] = 0; });
-    counts.trash = 0;
-    notes.forEach(n => {
-      if (n.deletedAt) { counts.trash++; return; }
-      if (n.type === 'timeline') counts.timeline++;
-      const effective = getEffectiveType(n);
-      if (effective !== 'timeline') counts[effective]++;
-      else if (n.type !== 'timeline') counts[n.type]++;
-    });
+    const counts = computeNoteCounts(state.getNotes());
     TYPES.concat(['trash']).forEach(type => {
       const el = document.querySelector(`.sidebar__count--${type}`);
       if (el) el.textContent = counts[type] || '';
