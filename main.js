@@ -242,15 +242,18 @@ function createTray() {
       label: '显示/隐藏',
       click: () => {
         if (!mainWindow) return;
-        if (mainWindow.isVisible()) {
+        if (snapState && !snapState.isShowing) {
+          // 贴边隐藏中 → 展开窗口
+          showWindow();
+          mainWindow.focus();
+        } else if (snapState && snapState.isShowing) {
+          // 贴边展开中 → 收回隐藏
+          hideWindow();
+        } else if (mainWindow.isVisible()) {
           mainWindow.hide();
         } else {
           mainWindow.show();
           mainWindow.focus();
-          // 贴边状态下显示到可见位置
-          if (snapState && !snapState.isShowing) {
-            showWindow();
-          }
         }
       }
     },
@@ -268,14 +271,16 @@ function createTray() {
 
   tray.on('double-click', () => {
     if (!mainWindow) return;
-    if (mainWindow.isVisible()) {
+    if (snapState && !snapState.isShowing) {
+      showWindow();
+      mainWindow.focus();
+    } else if (snapState && snapState.isShowing) {
+      hideWindow();
+    } else if (mainWindow.isVisible()) {
       mainWindow.hide();
     } else {
       mainWindow.show();
       mainWindow.focus();
-      if (snapState && !snapState.isShowing) {
-        showWindow();
-      }
     }
   });
 }
@@ -724,10 +729,11 @@ function checkForUpdate() {
         try {
           const release = JSON.parse(data);
           const latestVersion = release.tag_name?.replace('v', '') || '';
-          const currentVersion = app.getVersion();
+          const currentVersion = require('./package.json').version;
           const hasUpdate = latestVersion && latestVersion !== currentVersion;
           const downloadUrl = release.html_url || '';
           const releaseNotes = release.body || '';
+          console.log('[update] latest:', latestVersion, 'current:', currentVersion, 'hasUpdate:', hasUpdate);
           resolve({ hasUpdate, latestVersion, currentVersion, downloadUrl, releaseNotes });
         } catch (e) {
           resolve({ hasUpdate: false });
@@ -746,16 +752,11 @@ ipcMain.on('shell:openExternal', (_event, url) => {
 });
 
 app.whenReady().then(() => {
-  // 添加 Windows 防火墙规则（允许同步端口 48484 和 48485）
+  // 添加 Windows 防火墙规则（仅在规则不存在时创建，避免重复 PowerShell 调用）
   try {
-    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484,48485 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
-      if (err) console.log('[firewall] 防火墙规则添加失败（可忽略）:', err.message);
-    });
-  } catch (e) {}
-  // 也允许 UDP 发现端口 48483
-  try {
-    exec('powershell -Command "New-NetFirewallRule -DisplayName \'片笺 发现\' -Direction Inbound -Protocol UDP -LocalPort 48483 -Action Allow -Profile Any 2>$null; exit 0"', (err) => {
-      if (err) console.log('[firewall] UDP 防火墙规则添加失败（可忽略）:', err.message);
+    const fwCmd = 'powershell -NoProfile -Command "if (!(Get-NetFirewallRule -DisplayName \'片笺 同步\' -EA SilentlyContinue)) { New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484,48485 -Action Allow -Profile Any | Out-Null; New-NetFirewallRule -DisplayName \'片笺 发现\' -Direction Inbound -Protocol UDP -LocalPort 48483 -Action Allow -Profile Any | Out-Null }"';
+    exec(fwCmd, (err) => {
+      if (err) console.log('[firewall] 防火墙规则检查失败（可忽略）:', err.message);
     });
   } catch (e) {}
 

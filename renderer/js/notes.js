@@ -153,6 +153,8 @@ const notes = (() => {
   }
 
   // 渲染键：涵盖所有影响卡片呈现的字段
+  // 注意：不包含 updatedAt/content，避免编辑时防抖保存触发重建导致退出编辑模式
+  // 同步更新通过 forceRender 标记触发全量重渲染
   function renderKey(n) {
     return `${n.id}:${n.completed ? 1 : 0}:${getEffectiveType(n)}:${n.collapsed ? 1 : 0}:${n.remindAt || ''}:${n.deletedAt || ''}`;
   }
@@ -890,7 +892,7 @@ const notes = (() => {
     card.insertBefore(summary, card.firstChild);
 
     if (!note.content) {
-      setTimeout(() => enterEditMode(), 50);
+      setTimeout(() => showEditMode(), 50);
     }
 
     return card;
@@ -908,13 +910,11 @@ const notes = (() => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  function setsEqual(a, b) {
-    if (a.size !== b.size) return false;
-    for (const v of a) {
-      if (!b.has(v)) return false;
-    }
-    return true;
+  // 强制全量重渲染（用于同步数据更新后）
+  function forceRender() {
+    lastRendered.clear();
+    render();
   }
 
-  return { init, setSearch };
+  return { init, setSearch, forceRender };
 })();

@@ -20,7 +20,7 @@ const sync = (() => {
     });
 
     window.electronAPI.onSyncDataChanged(() => {
-      state.init();
+      state.init().then(() => notes.forceRender());
     });
 
     window.electronAPI.getSyncStatus().then((s) => {
