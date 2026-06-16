@@ -2,37 +2,78 @@ const notes = (() => {
   let lastRendered = new Map(); // id → { key, element }
   let searchQuery = '';
 
-  // ---- Markdown 渲染 ----
-  function renderInline(text) {
-    let s = text;
-    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
-    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    s = s.replace(/_(.+?)_/g, '<em>$1</em>');
-    s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    s = s.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:4px">');
-    s = s.replace(/\[([^\]]+)\]\s*\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    return s;
+  // ---- Markdown 渲染缓存 ----
+  const mdCache = new Map(); // content → HTML
+  const MD_CACHE_MAX = 50;
+
+  function mdCacheGet(content) {
+    if (!content) return '';
+    const hit = mdCache.get(content);
+    if (hit !== undefined) return hit;
+    return null; // miss
   }
 
+  function mdCacheSet(content, html) {
+    if (!content) return;
+    if (mdCache.size >= MD_CACHE_MAX) {
+      // LRU：删除最早的条目
+      const firstKey = mdCache.keys().next().value;
+      mdCache.delete(firstKey);
+    }
+    mdCache.set(content, html);
+  }
+
+  // ---- Markdown 渲染（单正则 + 缓存） ----
+  // 合并 9 个正则为 1 个，单次遍历处理所有行内标记
+  const INLINE_RE = /(`[^`]+`)|(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)|(~~(.+?)~~)|(!\[([^\]]*)\]\s*\(([^)]+)\))|(\[([^\]]+)\]\s*\(([^)]+)\))/g;
+
+  function renderInline(text) {
+    return text.replace(INLINE_RE, (
+      _match, code, _b1, boldEm, _b2, bold, _b3, boldUl,
+      _b4, em, _b5, emUl, _b6, del,
+      _b7, imgAlt, imgSrc, _b8, linkText, linkHref
+    ) => {
+      if (code) return '<code>' + code.slice(1, -1) + '</code>';
+      if (boldEm) return '<strong><em>' + boldEm + '</em></strong>';
+      if (bold) return '<strong>' + bold + '</strong>';
+      if (boldUl) return '<strong>' + boldUl + '</strong>';
+      if (em) return '<em>' + em + '</em>';
+      if (emUl) return '<em>' + emUl + '</em>';
+      if (del) return '<del>' + del + '</del>';
+      if (imgSrc) return '<img src="' + imgSrc + '" alt="' + (imgAlt || '') + '" style="max-width:100%;border-radius:4px">';
+      if (linkHref) return '<a href="' + linkHref + '" target="_blank" rel="noopener">' + (linkText || linkHref) + '</a>';
+      return _match;
+    });
+  }
+
+  // stripInline：去除 Markdown 标记，提取纯文本
+  const STRIP_RE = /(`[^`]+`)|(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)|(~~(.+?)~~)|(!\[([^\]]*)\]\([^)]+\))|(\[([^\]]+)\]\([^)]+\))/g;
+
   function stripInline(text) {
-    let s = text;
-    s = s.replace(/`([^`]+)`/g, '$1');
-    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
-    s = s.replace(/\*\*(.+?)\*\*/g, '$1');
-    s = s.replace(/__(.+?)__/g, '$1');
-    s = s.replace(/\*(.+?)\*/g, '$1');
-    s = s.replace(/_(.+?)_/g, '$1');
-    s = s.replace(/~~(.+?)~~/g, '$1');
-    s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
-    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-    return s;
+    return text.replace(STRIP_RE, (
+      _match, code, _b1, boldEm, _b2, bold, _b3, boldUl,
+      _b4, em, _b5, emUl, _b6, del,
+      _b7, imgAlt, _b8, linkText
+    ) => {
+      if (code) return code.slice(1, -1);
+      if (boldEm) return boldEm;
+      if (bold) return bold;
+      if (boldUl) return boldUl;
+      if (em) return em;
+      if (emUl) return emUl;
+      if (del) return del;
+      if (imgAlt) return imgAlt;
+      if (linkText) return linkText;
+      return _match;
+    });
   }
 
   function renderMarkdown(content) {
     if (!content) return '';
+    // 缓存命中
+    const cached = mdCacheGet(content);
+    if (cached !== null) return cached;
+
     const lines = content.split('\n');
     const html = [];
     let inUl = false, inOl = false, inBq = false, inCode = false;
@@ -120,7 +161,9 @@ const notes = (() => {
     }
     closeLists(); closeBlockquote();
     if (inCode) html.push('</code></pre>');
-    return html.join('');
+    const result = html.join('');
+    mdCacheSet(content, result);
+    return result;
   }
 
   // 提取第一行作为摘要（去除 Markdown 标记）
@@ -166,9 +209,12 @@ const notes = (() => {
       if (filtered.length !== lastRendered.size) {
         changed = true;
       } else {
-        for (const note of filtered) {
+        // 同时检测 renderKey 变化和顺序变化
+        const lastIds = Array.from(lastRendered.keys());
+        for (let i = 0; i < filtered.length; i++) {
+          const note = filtered[i];
           const prev = lastRendered.get(note.id);
-          if (!prev || prev.key !== renderKey(note)) {
+          if (!prev || prev.key !== renderKey(note) || lastIds[i] !== note.id) {
             changed = true;
             break;
           }
@@ -395,6 +441,190 @@ const notes = (() => {
     return card;
   }
 
+  // ---- 提醒控件：铃铛按钮 + 弹出日期时间面板 ----
+  function createReminderControl(note) {
+    const reminderEl = document.createElement('span');
+    reminderEl.className = 'note-card__reminder';
+
+    const bellBtn = document.createElement('button');
+    bellBtn.className = 'note-card__reminder-bell';
+    bellBtn.textContent = '\u{1F514}';
+    if (note.remindAt) {
+      bellBtn.classList.add('active');
+      const d = new Date(note.remindAt);
+      const pad = n => String(n).padStart(2, '0');
+      const repeat = note.reminderRepeat || 'none';
+      const repeatLabels = { none: '', daily: ' 每天', weekly: ' 每周', monthly: ' 每月', yearly: ' 每年' };
+      let repeatStr = repeatLabels[repeat] || '';
+      if (repeat === 'custom') repeatStr = ` 每${note.reminderRepeatInterval || 1}天`;
+      if (repeat === 'weekly' && note.reminderRepeatDays) {
+        const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+        repeatStr = ' 每周' + note.reminderRepeatDays.map(d => dayLabels[d]).join('/');
+      }
+      bellBtn.title = `提醒: ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}${repeatStr}`;
+    } else {
+      bellBtn.title = '设置提醒';
+    }
+
+    const popup = document.createElement('div');
+    popup.className = 'note-card__reminder-popup';
+
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'note-card__reminder-date-input';
+    if (note.remindAt) {
+      dateInput.value = new Date(note.remindAt).toISOString().slice(0, 10);
+    } else if (note.type === 'timeline' && note.customDate) {
+      dateInput.value = note.customDate;
+    } else {
+      dateInput.value = new Date().toISOString().slice(0, 10);
+    }
+
+    const timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.className = 'note-card__reminder-time-input';
+    if (note.remindAt) {
+      const d = new Date(note.remindAt);
+      timeInput.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    const repeatRow = document.createElement('div');
+    repeatRow.className = 'note-card__reminder-repeat';
+    const repeatLabel = document.createElement('span');
+    repeatLabel.className = 'note-card__reminder-repeat-label';
+    repeatLabel.textContent = '重复';
+    const repeatSelect = document.createElement('select');
+    repeatSelect.className = 'note-card__reminder-repeat-select';
+    ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'].forEach(val => {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = { none: '不重复', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', custom: '自定义' }[val];
+      repeatSelect.appendChild(opt);
+    });
+    repeatSelect.value = note.reminderRepeat || 'none';
+
+    const weekDaysRow = document.createElement('div');
+    weekDaysRow.className = 'note-card__reminder-weekdays';
+    weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
+    const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+    const weekChecks = [];
+    WEEK_LABELS.forEach((label, i) => {
+      const lbl = document.createElement('label');
+      lbl.className = 'note-card__reminder-weekday';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = i;
+      cb.checked = (note.reminderRepeatDays || []).includes(i);
+      cb.addEventListener('click', e => e.stopPropagation());
+      weekChecks.push(cb);
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(label));
+      lbl.addEventListener('click', e => { e.stopPropagation(); cb.checked = !cb.checked; });
+      weekDaysRow.appendChild(lbl);
+    });
+
+    const customRow = document.createElement('div');
+    customRow.className = 'note-card__reminder-custom';
+    customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
+    const customInput = document.createElement('input');
+    customInput.type = 'number';
+    customInput.min = '1';
+    customInput.max = '365';
+    customInput.value = note.reminderRepeatInterval || 1;
+    customInput.className = 'note-card__reminder-custom-input';
+    const customUnit = document.createElement('span');
+    customUnit.textContent = '天';
+    customRow.appendChild(customInput);
+    customRow.appendChild(customUnit);
+
+    repeatSelect.addEventListener('change', () => {
+      weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
+      customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
+    });
+
+    repeatRow.appendChild(repeatLabel);
+    repeatRow.appendChild(repeatSelect);
+    popup.appendChild(dateInput);
+    popup.appendChild(timeInput);
+    popup.appendChild(repeatRow);
+    popup.appendChild(weekDaysRow);
+    popup.appendChild(customRow);
+
+    const popupRow = document.createElement('div');
+    popupRow.className = 'note-card__reminder-popup-row';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'note-card__reminder-confirm';
+    confirmBtn.textContent = '\u{2714} \u{786E}\u{5B9A}';
+    confirmBtn.title = note.remindAt ? '更新提醒' : '设置提醒';
+    confirmBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (dateInput.value && timeInput.value) {
+        const [y, m, d] = dateInput.value.split('-').map(Number);
+        const [hours, minutes] = timeInput.value.split(':').map(Number);
+        const remindAt = new Date(y, m - 1, d, hours, minutes).toISOString();
+        const repeat = repeatSelect.value;
+        const changes = { remindAt };
+        if (repeat !== 'none') {
+          changes.reminderRepeat = repeat;
+          if (repeat === 'weekly') {
+            changes.reminderRepeatDays = weekChecks.filter(cb => cb.checked).map(cb => Number(cb.value));
+          } else if (repeat === 'custom') {
+            changes.reminderRepeatInterval = Number(customInput.value) || 1;
+          }
+        } else {
+          changes.reminderRepeat = 'none';
+          changes.reminderRepeatDays = undefined;
+          changes.reminderRepeatInterval = undefined;
+        }
+        await state.updateNote(note.id, changes);
+        popup.classList.remove('visible');
+      }
+    });
+    popupRow.appendChild(confirmBtn);
+
+    if (note.remindAt) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'note-card__reminder-popup-cancel';
+      cancelBtn.textContent = '\u{2716} \u{53D6}\u{6D88}\u{63D0}\u{9192}';
+      cancelBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await state.setReminder(note.id, null);
+        popup.classList.remove('visible');
+      });
+      popupRow.appendChild(cancelBtn);
+    }
+
+    popup.appendChild(popupRow);
+
+    bellBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.note-card__reminder-popup.visible').forEach(p => {
+        if (p !== popup) p.classList.remove('visible');
+      });
+      const rect = bellBtn.getBoundingClientRect();
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceRight = window.innerWidth - rect.right;
+      popup.style.left = spaceRight >= 200 ? (rect.right + 4) + 'px' : (rect.left - 200) + 'px';
+      popup.style.right = 'auto';
+      popup.style.top = 'auto';
+      popup.style.bottom = 'auto';
+      if (spaceBelow >= 140) {
+        popup.style.top = (rect.bottom + 4) + 'px';
+      } else if (spaceAbove >= 140) {
+        popup.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      } else {
+        popup.style.top = (rect.bottom + 4) + 'px';
+      }
+      popup.classList.toggle('visible');
+    });
+
+    reminderEl.appendChild(bellBtn);
+    document.body.appendChild(popup);
+    return reminderEl;
+  }
+
   function createCard(note) {
     const card = document.createElement('div');
     const effectiveType = getEffectiveType(note);
@@ -554,9 +784,19 @@ const notes = (() => {
     function exitEditMode() {
       if (!isEditing) return;
       const content = extractTextFromHtml(body.innerHTML);
+      // 如果内容没变，只切模式不触发状态更新
+      if (content === note.content) {
+        showDisplayMode();
+        return;
+      }
       note.content = content;
-      state.updateNote(note.id, { content });
-      showDisplayMode();
+      // 直接切回显示模式（用新内容渲染），不等 state 重建卡片
+      isEditing = false;
+      body.contentEditable = 'false';
+      body.innerHTML = renderMarkdown(content);
+      body.classList.remove('note-card__body--editing');
+      // 同步到主进程 + 本地 state（不触发 notify，避免卡片重建）
+      window.electronAPI.updateNote(note.id, { content });
     }
 
     // 收起/展开按钮（放在卡片右上角，紧邻内容）
@@ -585,7 +825,8 @@ const notes = (() => {
     const saveDebounced = debounce(async () => {
       const content = extractTextFromHtml(body.innerHTML);
       note.content = content;
-      await state.updateNote(note.id, { content });
+      // 直接写主进程，不触发 state.notify（避免编辑时卡片重建）
+      window.electronAPI.updateNote(note.id, { content });
     }, 300);
 
     body.addEventListener('input', saveDebounced);
@@ -621,204 +862,9 @@ const notes = (() => {
       metaLeft.appendChild(dateInput);
     }
 
-    // ---- 提醒控件（daily、weekly、timeline 类型）：铃铛按钮 → 弹出日期时间面板 ----
+    // ---- 提醒控件 ----
     if (note.type === 'daily' || note.type === 'weekly' || note.type === 'timeline') {
-      const reminderEl = document.createElement('span');
-      reminderEl.className = 'note-card__reminder';
-
-      // 铃铛按钮
-      const bellBtn = document.createElement('button');
-      bellBtn.className = 'note-card__reminder-bell';
-      bellBtn.textContent = '\u{1F514}';
-      if (note.remindAt) {
-        bellBtn.classList.add('active');
-        const d = new Date(note.remindAt);
-        const pad = n => String(n).padStart(2, '0');
-        const repeat = note.reminderRepeat || 'none';
-        const repeatLabels = { none: '', daily: ' 每天', weekly: ' 每周', monthly: ' 每月', yearly: ' 每年' };
-        let repeatStr = repeatLabels[repeat] || '';
-        if (repeat === 'custom') repeatStr = ` 每${note.reminderRepeatInterval || 1}天`;
-        if (repeat === 'weekly' && note.reminderRepeatDays) {
-          const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
-          repeatStr = ' 每周' + note.reminderRepeatDays.map(d => dayLabels[d]).join('/');
-        }
-        bellBtn.title = `提醒: ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}${repeatStr}`;
-      } else {
-        bellBtn.title = '设置提醒';
-      }
-
-      // 弹出面板
-      const popup = document.createElement('div');
-      popup.className = 'note-card__reminder-popup';
-
-      const dateInput = document.createElement('input');
-      dateInput.type = 'date';
-      dateInput.className = 'note-card__reminder-date-input';
-      if (note.remindAt) {
-        dateInput.value = new Date(note.remindAt).toISOString().slice(0, 10);
-      } else if (note.type === 'timeline' && note.customDate) {
-        dateInput.value = note.customDate;
-      } else {
-        dateInput.value = new Date().toISOString().slice(0, 10);
-      }
-
-      const timeInput = document.createElement('input');
-      timeInput.type = 'time';
-      timeInput.className = 'note-card__reminder-time-input';
-      if (note.remindAt) {
-        const d = new Date(note.remindAt);
-        timeInput.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      }
-
-      // 重复选择
-      const repeatRow = document.createElement('div');
-      repeatRow.className = 'note-card__reminder-repeat';
-
-      const repeatLabel = document.createElement('span');
-      repeatLabel.className = 'note-card__reminder-repeat-label';
-      repeatLabel.textContent = '重复';
-
-      const repeatSelect = document.createElement('select');
-      repeatSelect.className = 'note-card__reminder-repeat-select';
-      ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'].forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = { none: '不重复', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', custom: '自定义' }[val];
-        repeatSelect.appendChild(opt);
-      });
-      repeatSelect.value = note.reminderRepeat || 'none';
-
-      // 每周：星期选择（默认显示/隐藏）
-      const weekDaysRow = document.createElement('div');
-      weekDaysRow.className = 'note-card__reminder-weekdays';
-      weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
-      const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
-      const weekChecks = [];
-      WEEK_LABELS.forEach((label, i) => {
-        const lbl = document.createElement('label');
-        lbl.className = 'note-card__reminder-weekday';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = i;
-        cb.checked = (note.reminderRepeatDays || []).includes(i);
-        cb.addEventListener('click', e => e.stopPropagation());
-        weekChecks.push(cb);
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(label));
-        lbl.addEventListener('click', e => {
-          e.stopPropagation();
-          cb.checked = !cb.checked;
-        });
-        weekDaysRow.appendChild(lbl);
-      });
-
-      // 自定义间隔（默认显示/隐藏）
-      const customRow = document.createElement('div');
-      customRow.className = 'note-card__reminder-custom';
-      customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
-      const customInput = document.createElement('input');
-      customInput.type = 'number';
-      customInput.min = '1';
-      customInput.max = '365';
-      customInput.value = note.reminderRepeatInterval || 1;
-      customInput.className = 'note-card__reminder-custom-input';
-      const customUnit = document.createElement('span');
-      customUnit.textContent = '天';
-      customRow.appendChild(customInput);
-      customRow.appendChild(customUnit);
-
-      // 重复选择切换
-      repeatSelect.addEventListener('change', () => {
-        weekDaysRow.style.display = repeatSelect.value === 'weekly' ? 'flex' : 'none';
-        customRow.style.display = repeatSelect.value === 'custom' ? 'flex' : 'none';
-      });
-
-      repeatRow.appendChild(repeatLabel);
-      repeatRow.appendChild(repeatSelect);
-      popup.appendChild(dateInput);
-      popup.appendChild(timeInput);
-      popup.appendChild(repeatRow);
-      popup.appendChild(weekDaysRow);
-      popup.appendChild(customRow);
-
-      // 操作按钮行
-      const popupRow = document.createElement('div');
-      popupRow.className = 'note-card__reminder-popup-row';
-
-      const confirmBtn = document.createElement('button');
-      confirmBtn.className = 'note-card__reminder-confirm';
-      confirmBtn.textContent = '\u{2714} \u{786E}\u{5B9A}';
-      confirmBtn.title = note.remindAt ? '更新提醒' : '设置提醒';
-      confirmBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (dateInput.value && timeInput.value) {
-          const [y, m, d] = dateInput.value.split('-').map(Number);
-          const [hours, minutes] = timeInput.value.split(':').map(Number);
-          const remindAt = new Date(y, m - 1, d, hours, minutes).toISOString();
-          const repeat = repeatSelect.value;
-          const changes = { remindAt };
-          if (repeat !== 'none') {
-            changes.reminderRepeat = repeat;
-            if (repeat === 'weekly') {
-              changes.reminderRepeatDays = weekChecks.filter(cb => cb.checked).map(cb => Number(cb.value));
-            } else if (repeat === 'custom') {
-              changes.reminderRepeatInterval = Number(customInput.value) || 1;
-            }
-          } else {
-            changes.reminderRepeat = 'none';
-            changes.reminderRepeatDays = undefined;
-            changes.reminderRepeatInterval = undefined;
-          }
-          await state.updateNote(note.id, changes);
-          popup.classList.remove('visible');
-        }
-      });
-      popupRow.appendChild(confirmBtn);
-
-      // 已设置提醒时显示"取消提醒"按钮
-      if (note.remindAt) {
-        const cancelReminderBtn = document.createElement('button');
-        cancelReminderBtn.className = 'note-card__reminder-popup-cancel';
-        cancelReminderBtn.textContent = '\u{2716} \u{53D6}\u{6D88}\u{63D0}\u{9192}';
-        cancelReminderBtn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await state.setReminder(note.id, null);
-          popup.classList.remove('visible');
-        });
-        popupRow.appendChild(cancelReminderBtn);
-      }
-
-      popup.appendChild(popupRow);
-
-      // 铃铛点击切换弹窗
-      bellBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // 关闭其他所有弹窗
-        document.querySelectorAll('.note-card__reminder-popup.visible').forEach(p => {
-          if (p !== popup) p.classList.remove('visible');
-        });
-        // 智能定位：向右弹出，下方优先
-        const rect = bellBtn.getBoundingClientRect();
-        const spaceAbove = rect.top;
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const spaceRight = window.innerWidth - rect.right;
-        popup.style.left = spaceRight >= 200 ? (rect.right + 4) + 'px' : (rect.left - 200) + 'px';
-        popup.style.right = 'auto';
-        popup.style.top = 'auto';
-        popup.style.bottom = 'auto';
-        if (spaceBelow >= 140) {
-          popup.style.top = (rect.bottom + 4) + 'px';
-        } else if (spaceAbove >= 140) {
-          popup.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-        } else {
-          popup.style.top = (rect.bottom + 4) + 'px';
-        }
-        popup.classList.toggle('visible');
-      });
-
-      reminderEl.appendChild(bellBtn);
-      document.body.appendChild(popup);
-      metaLeft.appendChild(reminderEl);
+      metaLeft.appendChild(createReminderControl(note));
     }
 
     const delBtn = document.createElement('button');
@@ -910,7 +956,7 @@ const notes = (() => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  // 强制全量重渲染（用于同步数据更新后）
+  // 强制全量重渲染（用于同步数据更新后 / 排序后）
   function forceRender() {
     lastRendered.clear();
     render();

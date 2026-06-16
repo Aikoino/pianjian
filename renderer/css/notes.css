@@ -16,7 +16,7 @@
   flex-direction: column;
   gap: 6px;
   animation: cardIn 0.15s ease-out;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, transform 0.2s ease;
 }
 
 @keyframes cardIn {
@@ -271,18 +271,21 @@
 
 /* 拖拽排序样式 */
 .note-card--dragging {
-  opacity: 0.5;
-  transform: scale(0.98);
+  opacity: 0.4;
+  transform: scale(0.96);
+  transition: opacity 0.15s, transform 0.15s;
 }
 
 .note-card--drag-over-top {
   border-top: 3px solid var(--color-accent, #1a73e8);
   margin-top: -3px;
+  transition: border-color 0.15s, margin 0.15s;
 }
 
 .note-card--drag-over-bottom {
   border-bottom: 3px solid var(--color-accent, #1a73e8);
   margin-bottom: -3px;
+  transition: border-color 0.15s, margin 0.15s;
 }
 
 .note-card__drag-handle {
