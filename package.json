@@ -1,6 +1,6 @@
 {
   "name": "pianjian",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "片笺 - 轻量级桌面便签软件",
   "main": "main.js",
   "scripts": {
@@ -9,16 +9,13 @@
   },
   "license": "MIT",
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "ws": "^8.20.1"
   },
   "devDependencies": {
     "electron": "^22.3.27",
     "electron-builder": "^25.1.8",
-    "png-to-ico": "^3.0.1",
     "rcedit": "^5.0.2",
-    "sharp": "^0.34.5",
-    "to-ico": "^1.1.5"
+    "sharp": "^0.34.5"
   },
   "build": {
     "appId": "com.pianjian.app",

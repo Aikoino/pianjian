@@ -113,6 +113,135 @@ function initTitleBar() {
     }
   });
 
+  // ---- 更多菜单 ----
+  const moreBtn = document.getElementById('btn-more');
+  const moreMenu = document.getElementById('more-menu');
+
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    moreMenu.classList.toggle('visible');
+    if (moreMenu.classList.contains('visible')) {
+      const rect = moreBtn.getBoundingClientRect();
+      moreMenu.style.top = (rect.bottom + 2) + 'px';
+      moreMenu.style.right = (window.innerWidth - rect.right) + 'px';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!moreMenu.contains(e.target)) moreMenu.classList.remove('visible');
+  });
+
+  // ---- 导出选择面板 ----
+  const exportOverlay = document.getElementById('export-overlay');
+  const exportPanelTitle = document.getElementById('export-panel-title');
+  const exportList = document.getElementById('export-list');
+  const exportSelectAll = document.getElementById('export-select-all');
+  const exportCount = document.getElementById('export-count');
+  const exportConfirm = document.getElementById('export-confirm');
+  const exportCancel = document.getElementById('export-cancel');
+  const exportPanelClose = document.getElementById('export-panel-close');
+
+  let exportMode = ''; // 'json' | 'markdown'
+
+  const TYPE_COLORS = {
+    daily: '#B71C1C', weekly: '#E65100', normal: '#1B5E20', timeline: '#880E4F'
+  };
+  const TYPE_LABELS = {
+    daily: '今日', weekly: '周', normal: '便签', timeline: '时间轴'
+  };
+
+  function stripMd(text) {
+    return (text || '').replace(/[#*`~>\-\[\]()!_]/g, '').split('\n')[0].trim() || '(无内容)';
+  }
+
+  function showExportPanel(mode) {
+    exportMode = mode;
+    exportPanelTitle.textContent = mode === 'json' ? '选择要备份的便签' : '选择要导出的便签';
+    const notes = state.getNotes().filter(n => !n.deletedAt);
+    exportList.innerHTML = '';
+    exportSelectAll.checked = true;
+
+    notes.forEach(note => {
+      const item = document.createElement('label');
+      item.className = 'export-panel__item';
+      const firstLine = stripMd(note.content);
+      item.innerHTML = `
+        <input type="checkbox" checked data-id="${note.id}">
+        <span class="export-panel__item-label">${firstLine}</span>
+        <span class="export-panel__item-type" style="background:${TYPE_COLORS[note.type] || '#999'}">${TYPE_LABELS[note.type] || note.type}</span>
+      `;
+      exportList.appendChild(item);
+    });
+
+    updateExportCount();
+    exportOverlay.classList.add('visible');
+  }
+
+  function hideExportPanel() {
+    exportOverlay.classList.remove('visible');
+  }
+
+  function updateExportCount() {
+    const checked = exportList.querySelectorAll('input[type="checkbox"]:checked').length;
+    const total = exportList.querySelectorAll('input[type="checkbox"]').length;
+    exportCount.textContent = `已选 ${checked}/${total}`;
+  }
+
+  exportList.addEventListener('change', updateExportCount);
+
+  exportSelectAll.addEventListener('change', () => {
+    const checked = exportSelectAll.checked;
+    exportList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = checked);
+    updateExportCount();
+  });
+
+  function getSelectedIds() {
+    const ids = [];
+    exportList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => ids.push(cb.dataset.id));
+    return ids;
+  }
+
+  exportConfirm.addEventListener('click', async () => {
+    const ids = getSelectedIds();
+    if (ids.length === 0) { alert('请至少选择一条便签'); return; }
+    hideExportPanel();
+    if (exportMode === 'json') {
+      const result = await window.electronAPI.exportJSON(ids);
+      if (result.ok) alert(`备份成功！\n共 ${result.count} 条便签`);
+      else if (result.error) alert('备份失败：' + result.error);
+    } else {
+      const result = await window.electronAPI.exportMarkdown(ids);
+      if (result.ok) alert(`导出成功！\n共 ${result.count} 条便签`);
+      else if (result.error) alert('导出失败：' + result.error);
+    }
+  });
+
+  exportCancel.addEventListener('click', hideExportPanel);
+  exportPanelClose.addEventListener('click', hideExportPanel);
+  exportOverlay.addEventListener('click', (e) => { if (e.target === exportOverlay) hideExportPanel(); });
+
+  document.getElementById('menu-export-json').addEventListener('click', () => {
+    moreMenu.classList.remove('visible');
+    showExportPanel('json');
+  });
+
+  document.getElementById('menu-export-md').addEventListener('click', () => {
+    moreMenu.classList.remove('visible');
+    showExportPanel('markdown');
+  });
+
+  document.getElementById('menu-import-json').addEventListener('click', async () => {
+    moreMenu.classList.remove('visible');
+    const result = await window.electronAPI.importJSON();
+    if (result.ok) {
+      alert(`恢复成功！\n文件中共 ${result.total} 条便签\n新增 ${result.added} 条，跳过 ${result.skipped} 条重复`);
+      await state.init();
+      notes.forceRender();
+    } else if (result.error) {
+      alert('恢复失败：' + result.error);
+    }
+  });
+
   // ---- 全局快捷键 ----
   document.addEventListener('keydown', async (e) => {
     // Ctrl+F → 聚焦搜索

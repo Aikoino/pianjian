@@ -1,9 +1,10 @@
 // 所有 IPC 处理器
-const { ipcMain, dialog, shell } = require('electron');
+const { ipcMain, dialog, shell, nativeTheme } = require('electron');
 const https = require('https');
+const fs = require('fs');
 const path = require('path');
 const { loadNotes, saveNotes } = require('../server/data-store');
-const { getCloseAction, setCloseAction, setIsPinned, getIsPinned } = require('../server/config-store');
+const { getCloseAction, setCloseAction, setIsPinned, getIsPinned, getTheme, setTheme, getReminderPresets, setReminderPresets } = require('../server/config-store');
 const syncManager = require('../server/sync-manager');
 const snap = require('./snap');
 
@@ -139,6 +140,28 @@ function registerIpcHandlers(win, app) {
     }
   });
 
+  // 主题
+  ipcMain.handle('theme:get', () => getTheme());
+  ipcMain.handle('theme:set', (_event, theme) => {
+    setTheme(theme);
+    return true;
+  });
+  ipcMain.handle('theme:systemDark', () => nativeTheme.shouldUseDarkColors);
+
+  // 提醒快捷预设
+  ipcMain.handle('reminderPresets:get', () => getReminderPresets());
+  ipcMain.handle('reminderPresets:set', (_event, presets) => {
+    setReminderPresets(presets);
+    return true;
+  });
+
+  // 监听系统主题变化，通知渲染进程
+  nativeTheme.on('updated', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('theme:systemChanged', nativeTheme.shouldUseDarkColors);
+    }
+  });
+
   // 数据操作
   ipcMain.handle('notes:getAll', () => loadNotes());
 
@@ -188,6 +211,89 @@ function registerIpcHandlers(win, app) {
       return true;
     }
     return false;
+  });
+
+  // ---- 导入/导出 ----
+  ipcMain.handle('export:json', async (_event, selectedIds) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: '备份数据',
+      defaultPath: `pianjian_backup_${new Date().toISOString().slice(0,10)}.json`,
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }]
+    });
+    if (canceled || !filePath) return { ok: false };
+    try {
+      const allNotes = loadNotes();
+      const notes = selectedIds
+        ? allNotes.filter(n => selectedIds.includes(n.id))
+        : allNotes;
+      fs.writeFileSync(filePath, JSON.stringify(notes, null, 2), 'utf-8');
+      return { ok: true, count: notes.length, path: filePath };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('import:json', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: '导入备份',
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+    if (canceled || !filePaths.length) return { ok: false };
+    try {
+      const raw = fs.readFileSync(filePaths[0], 'utf-8');
+      const imported = JSON.parse(raw);
+      if (!Array.isArray(imported)) return { ok: false, error: '文件格式无效：不是便签数组' };
+      const valid = imported.filter(n => n && typeof n.id === 'string' && n.id.length > 0);
+      if (valid.length === 0) return { ok: false, error: '文件中没有有效的便签数据' };
+      const existing = loadNotes();
+      const existingIds = new Set(existing.map(n => n.id));
+      const merged = [...existing];
+      let added = 0;
+      for (const note of valid) {
+        if (!existingIds.has(note.id)) {
+          merged.push(note);
+          added++;
+        }
+      }
+      saveNotes(merged);
+      return { ok: true, total: valid.length, added, skipped: valid.length - added };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('export:markdown', async (_event, selectedIds) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: '导出为 Markdown',
+      defaultPath: `pianjian_export_${new Date().toISOString().slice(0,10)}.md`,
+      filters: [{ name: 'Markdown 文件', extensions: ['md'] }]
+    });
+    if (canceled || !filePath) return { ok: false };
+    try {
+      const allNotes = loadNotes();
+      const TYPE_LABELS = { daily: '今日待办', weekly: '周待办', normal: '便签', timeline: '时间轴' };
+      const activeNotes = allNotes.filter(n => {
+        if (n.deletedAt) return false;
+        if (selectedIds && !selectedIds.includes(n.id)) return false;
+        return true;
+      });
+      const lines = ['# 片笺导出', `> 导出时间：${new Date().toLocaleString('zh-CN')}，共 ${activeNotes.length} 条便签`, ''];
+      for (const note of activeNotes) {
+        const label = TYPE_LABELS[note.type] || note.type;
+        const date = note.customDate || note.createdAt?.slice(0, 10) || '';
+        lines.push(`## ${label}${date ? ' · ' + date : ''}`);
+        lines.push('');
+        lines.push(note.content || '(无内容)');
+        lines.push('');
+        lines.push('---');
+        lines.push('');
+      }
+      fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
+      return { ok: true, count: activeNotes.length, path: filePath };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   });
 
   // 同步

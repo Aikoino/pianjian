@@ -26,6 +26,46 @@
   --font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
 }
 
+/* ---- 暗色主题 ---- */
+[data-theme="dark"] {
+  --color-timeline-bg: #2d2233;
+  --color-timeline-text: #F48FB1;
+  --color-normal-bg: #1e2d1e;
+  --color-normal-text: #81C784;
+  --color-weekly-bg: #2d2518;
+  --color-weekly-text: #FFB74D;
+  --color-daily-bg: #2d1a1a;
+  --color-daily-text: #EF9A9A;
+
+  --color-bg: #121212;
+  --color-surface: #1e1e1e;
+  --color-text: #e0e0e0;
+  --color-text-muted: #888;
+  --color-border: #333;
+  --color-accent: #aaa;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-popup: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .sidebar__tab:hover { background: rgba(255,255,255,0.06); }
+[data-theme="dark"] .note-card__check { border-color: rgba(255,255,255,0.2); }
+[data-theme="dark"] .note-card__toolbar-btn:hover { background: rgba(255,255,255,0.1); }
+[data-theme="dark"] .context-menu__item:hover,
+[data-theme="dark"] .more-menu__item:hover { background: rgba(255,255,255,0.08); }
+[data-theme="dark"] .export-panel__item:hover { background: rgba(255,255,255,0.05); }
+[data-theme="dark"] .note-card__trash-btn--restore { background: #1e2d1e; }
+[data-theme="dark"] .note-card__trash-btn--restore:hover { background: #2a3d2a; }
+[data-theme="dark"] .note-card__trash-btn--delete { background: #2d1a1a; }
+[data-theme="dark"] .note-card__trash-btn--delete:hover { background: #3d2020; }
+[data-theme="dark"] code { background: rgba(255,255,255,0.08); }
+[data-theme="dark"] .update-banner__btn { background: #1e1e1e; color: #1a73e8; }
+[data-theme="dark"] .update-banner__btn:hover { background: #2a2a2a; }
+[data-theme="dark"] input { color: var(--color-text); }
+[data-theme="dark"] .note-card__body a { color: #64B5F6; }
+[data-theme="dark"] .note-card__reminder-quick-btn { background: var(--color-surface); }
+[data-theme="dark"] .note-card__reminder-quick-btn:hover { background: rgba(255,255,255,0.1); }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {

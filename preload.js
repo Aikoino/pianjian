@@ -26,6 +26,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAutoLaunch: () => ipcRenderer.invoke('autoLaunch:get'),
   setAutoLaunch: (enabled) => ipcRenderer.invoke('autoLaunch:set', enabled),
 
+  // 主题
+  getTheme: () => ipcRenderer.invoke('theme:get'),
+  setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
+  getSystemDark: () => ipcRenderer.invoke('theme:systemDark'),
+  onSystemThemeChanged: (callback) => {
+    const handler = (_event, isDark) => callback(isDark);
+    ipcRenderer.on('theme:systemChanged', handler);
+    return () => ipcRenderer.removeListener('theme:systemChanged', handler);
+  },
+
+  // 提醒快捷预设
+  getReminderPresets: () => ipcRenderer.invoke('reminderPresets:get'),
+  setReminderPresets: (presets) => ipcRenderer.invoke('reminderPresets:set', presets),
+
   // 数据操作
   getNotes: () => ipcRenderer.invoke('notes:getAll'),
   addNote: (note) => ipcRenderer.invoke('notes:add', note),
@@ -35,6 +49,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 提醒
   setReminder: (id, remindAt) => ipcRenderer.invoke('notes:setReminder', id, remindAt),
+
+  // 导入/导出
+  exportJSON: (selectedIds) => ipcRenderer.invoke('export:json', selectedIds),
+  importJSON: () => ipcRenderer.invoke('import:json'),
+  exportMarkdown: (selectedIds) => ipcRenderer.invoke('export:markdown', selectedIds),
   onReminderTriggered: (callback) => {
     const handler = (_event, noteId) => callback(noteId);
     ipcRenderer.on('reminder:triggered', handler);

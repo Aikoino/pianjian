@@ -516,6 +516,75 @@ const notes = (() => {
     const popup = document.createElement('div');
     popup.className = 'note-card__reminder-popup';
 
+    // ---- 快捷选项（从配置加载） ----
+    const quickRow = document.createElement('div');
+    quickRow.className = 'note-card__reminder-quick';
+
+    async function loadQuickButtons() {
+      quickRow.innerHTML = '';
+      const presets = await window.electronAPI.getReminderPresets();
+      console.log('[quick] 加载预设:', JSON.stringify(presets));
+      presets.forEach(preset => {
+        const btn = document.createElement('button');
+        btn.className = 'note-card__reminder-quick-btn';
+        btn.textContent = preset.label;
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const target = calcPreset(preset);
+          if (target) {
+            await state.setReminder(note.id, target.toISOString());
+            popup.classList.remove('visible');
+          }
+        });
+        quickRow.appendChild(btn);
+      });
+      // 管理按钮
+      const editBtn = document.createElement('button');
+      editBtn.className = 'note-card__reminder-quick-btn note-card__reminder-quick-btn--edit';
+      editBtn.textContent = '⚙';
+      editBtn.title = '管理快捷选项';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPresetManager(popup);
+      });
+      quickRow.appendChild(editBtn);
+    }
+    loadQuickButtons();
+    // 预设更新后刷新按钮
+    quickRow.addEventListener('presetsUpdated', () => loadQuickButtons());
+    popup.appendChild(quickRow);
+
+    function calcPreset(preset) {
+      const now = new Date();
+      switch (preset.type) {
+        case 'minutes': {
+          const d = new Date(now);
+          d.setMinutes(d.getMinutes() + preset.value);
+          return d;
+        }
+        case 'hours': {
+          const d = new Date(now);
+          d.setHours(d.getHours() + preset.value);
+          return d;
+        }
+        case 'tomorrow': {
+          const d = new Date(now);
+          d.setDate(d.getDate() + 1);
+          d.setHours(preset.hour || 9, preset.minute || 0, 0, 0);
+          return d;
+        }
+        case 'nextWeekday': {
+          const d = new Date(now);
+          const target = preset.weekday ?? 1;
+          const daysUntil = (target - d.getDay() + 7) % 7 || 7;
+          d.setDate(d.getDate() + daysUntil);
+          d.setHours(preset.hour || 9, preset.minute || 0, 0, 0);
+          return d;
+        }
+        default: return null;
+      }
+    }
+
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.className = 'note-card__reminder-date-input';
@@ -809,12 +878,93 @@ const notes = (() => {
 
     let isEditing = false;
 
+    // ---- 格式工具栏 ----
+    const toolbar = document.createElement('div');
+    toolbar.className = 'note-card__toolbar';
+    const TOOLBAR_ITEMS = [
+      { label: 'B', title: '粗体 (Ctrl+B)', wrap: ['**', '**'] },
+      { label: 'I', title: '斜体 (Ctrl+I)', wrap: ['*', '*'] },
+      { label: 'S', title: '删除线', wrap: ['~~', '~~'] },
+      { label: '<>', title: '行内代码', wrap: ['`', '`'] },
+      { label: '|', title: '引用', prefix: '> ' },
+      { label: '#', title: '标题', prefix: '# ' },
+      { label: '•', title: '无序列表', prefix: '- ' },
+      { label: '1.', title: '有序列表', prefix: '1. ' },
+      { label: '{}', title: '代码块', wrap: ['```\n', '\n```'] },
+      { label: '🔗', title: '链接', wrap: ['[', '](url)'] },
+    ];
+    TOOLBAR_ITEMS.forEach(item => {
+      const btn = document.createElement('button');
+      btn.className = 'note-card__toolbar-btn';
+      btn.textContent = item.label;
+      btn.title = item.title;
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // 防止 body 失焦
+        applyFormat(item);
+      });
+      toolbar.appendChild(btn);
+    });
+    toolbar.style.display = 'none';
+
+    function applyFormat(item) {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      // 确保选区在 body 内
+      if (!body.contains(range.commonAncestorContainer)) return;
+
+      const selected = sel.toString();
+
+      if (item.wrap) {
+        const [pre, suf] = item.wrap;
+        if (selected) {
+          // 有选中文本：包裹
+          const replacement = pre + selected + suf;
+          range.deleteContents();
+          range.insertNode(document.createTextNode(replacement));
+        } else {
+          // 无选中文本：插入标记，光标移到中间
+          const marker = pre + suf;
+          range.insertNode(document.createTextNode(marker));
+          // 将光标移到 pre 和 suf 之间
+          range.setStart(range.startContainer, range.startOffset - suf.length);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } else if (item.prefix) {
+        // 行前缀（标题、列表）：在行首插入
+        const lineRange = document.createRange();
+        let node = range.startContainer;
+        // 找到行首
+        while (node !== body && node.previousSibling) {
+          if (node.nodeType === 3 && node.textContent.includes('\n')) break;
+          node = node.previousSibling || node.parentNode;
+        }
+        // 简单方案：在选中文本前插入前缀
+        if (selected) {
+          const replacement = item.prefix + selected;
+          range.deleteContents();
+          range.insertNode(document.createTextNode(replacement));
+        } else {
+          range.insertNode(document.createTextNode(item.prefix));
+          range.setStart(range.startContainer, range.startOffset);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }
+      // 触发 input 事件以保存
+      body.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     // 显示模式：渲染 Markdown HTML，不可编辑
     function showDisplayMode() {
       isEditing = false;
       body.contentEditable = 'false';
       body.innerHTML = renderMarkdown(note.content);
       body.classList.remove('note-card__body--editing');
+      toolbar.style.display = 'none';
     }
 
     // 编辑模式：显示原始 Markdown，可编辑
@@ -823,6 +973,7 @@ const notes = (() => {
       body.contentEditable = 'true';
       body.textContent = note.content;
       body.classList.add('note-card__body--editing');
+      toolbar.style.display = '';
       body.focus();
       placeCaretAtEnd(body);
     }
@@ -886,6 +1037,7 @@ const notes = (() => {
       }
     });
     row.appendChild(body);
+    card.appendChild(toolbar);
     card.appendChild(row);
 
     // 底部行：日期 / 时间 / 删除 / 提醒

@@ -82,6 +82,13 @@
   white-space: pre-wrap;
 }
 
+/* 编辑模式 */
+.note-card__body--editing {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
 /* 显示模式：Markdown 元素样式 */
 .note-card__body strong { font-weight: 600; }
 .note-card__body em { font-style: italic; }
@@ -420,6 +427,42 @@
   display: flex;
 }
 
+/* 快捷选项 */
+.note-card__reminder-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.note-card__reminder-quick-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.note-card__reminder-quick-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.note-card__reminder-quick-btn--edit {
+  font-size: 13px;
+  min-width: 28px;
+  padding: 4px 6px;
+  opacity: 0.5;
+}
+
+.note-card__reminder-quick-btn--edit:hover {
+  opacity: 1;
+}
+
 .note-card__reminder-popup .note-card__reminder-date-input,
 .note-card__reminder-popup .note-card__reminder-time-input {
   font-size: 12px;
@@ -611,4 +654,34 @@
 }
 .note-card__trash-btn--delete:hover {
   background: #ffcdd2;
+}
+
+/* ---- 格式工具栏 ---- */
+.note-card__toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.note-card__toolbar-btn {
+  width: 28px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  padding: 0;
+}
+
+.note-card__toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-text);
 }

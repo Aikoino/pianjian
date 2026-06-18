@@ -89,9 +89,39 @@ function setIsPinned(pinned) {
   saveConfig(config);
 }
 
+function getTheme() {
+  const config = loadConfig();
+  return config.theme || 'light';
+}
+
+function setTheme(theme) {
+  const config = loadConfig();
+  config.theme = theme;
+  saveConfig(config);
+}
+
+function getReminderPresets() {
+  const config = loadConfig();
+  return config.reminderPresets || [
+    { label: '5 分钟', type: 'minutes', value: 5 },
+    { label: '30 分钟', type: 'minutes', value: 30 },
+    { label: '1 小时', type: 'hours', value: 1 },
+    { label: '明天 9:00', type: 'tomorrow', hour: 9 },
+    { label: '下周一 9:00', type: 'nextWeekday', weekday: 1, hour: 9 },
+  ];
+}
+
+function setReminderPresets(presets) {
+  const config = loadConfig();
+  config.reminderPresets = presets;
+  saveConfig(config);
+}
+
 module.exports = {
   getCloseAction, setCloseAction,
   getWindowBounds, setWindowBounds,
   getSnapState, setSnapState, clearSnapState,
-  getIsPinned, setIsPinned
+  getIsPinned, setIsPinned,
+  getTheme, setTheme,
+  getReminderPresets, setReminderPresets
 };
