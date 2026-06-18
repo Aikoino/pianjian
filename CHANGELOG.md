@@ -1,5 +1,52 @@
 # 版本日志
 
+## v1.8.0 (2026-06-18)
+
+### 新增
+
+- **全部视图**：侧边栏新增「全部」标签，显示所有未删除便签，支持搜索
+- **全局快捷键**：
+  - `Ctrl+N`：新建普通便签
+  - `Ctrl+F`：聚焦搜索框
+  - `Esc`：关闭搜索框或添加弹窗
+- **右键菜单**：
+  - 便签卡片右键：复制内容、标记完成、设置提醒、删除
+  - 笔记区域空白处右键：快速新建四类便签
+  - 回收站卡片右键：恢复、彻底删除
+
+### 优化
+
+- **自启动重构**：使用 Electron 原生 API 替代 PowerShell 注册表操作，消除命令注入风险
+- **安全加固**：
+  - `shell:openExternal` 添加 URL 协议白名单（仅允许 http/https）
+  - `webSecurity: false` 改用自定义 `local-img://` 安全协议
+  - Markdown 渲染器 XSS 修复：链接协议白名单、图片/代码 HTML 转义
+  - `notes:update` 添加字段白名单过滤，`notes:saveAll` 添加数据校验
+  - 版本比较改用语义化数字比较（修复 `1.9.0` vs `1.10.0` 字符串比较 bug）
+- **性能优化**：
+  - `sync-store.js` 添加内存缓存，减少磁盘 I/O
+  - `uuid()` 改用 `crypto.randomUUID()`（密码学安全随机数）
+  - `sha256` 函数提取为公共模块，消除三处重复
+- **贴边修复**：
+  - `setPosSafely` 使用 `clearTimeout` 消除 150ms 竞态条件
+  - hover 轮询中 `showWindow` 调用后重置计时器，避免重复触发
+  - `cleanup` 补全所有 timer 清理
+- **托盘显示/隐藏**：修复有贴边状态时点击托盘「显示/隐藏」无效的问题
+- **提醒同步**：重复提醒更新后自动同步广播到其他设备
+
+### 修复
+
+- **回收站显示 bug**：从回收站切换到正常视图时，回收站卡片残留在列表底部
+- **`computeNoteCounts` 计数 bug**：timeline 类型的 today/weekly 条目被重复计入多个分类
+- **`getEffectiveType` 时区 bug**：混用 UTC 和本地时区导致凌晨日期 off-by-one
+- **`isExpired` 时区 bug**：同上，影响过期便签的显示
+- **`reorderNotes` 未 await**：拖拽排序后磁盘写入未等待完成，崩溃可能丢失排序
+- **`deleteNote`/`restoreNote` 内存与磁盘不一致**：统一使用 `null` 表示"无值"
+- **`setAutoLaunch` 乐观更新无回滚**：写入失败时恢复 UI 状态
+- **移除废弃代码**：`runPowerShell`、`getLaunchTarget`、`AUTORUN_NAME` 等不再需要的函数和常量
+
+---
+
 ## v1.7.0 (2026-06-03)
 
 ### 新增

@@ -33,15 +33,32 @@ const notes = (() => {
       _b4, em, _b5, emUl, _b6, del,
       _b7, imgAlt, imgSrc, _b8, linkText, linkHref
     ) => {
-      if (code) return '<code>' + code.slice(1, -1) + '</code>';
+      if (code) return '<code>' + code.slice(1, -1).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code>';
       if (boldEm) return '<strong><em>' + boldEm + '</em></strong>';
       if (bold) return '<strong>' + bold + '</strong>';
       if (boldUl) return '<strong>' + boldUl + '</strong>';
       if (em) return '<em>' + em + '</em>';
       if (emUl) return '<em>' + emUl + '</em>';
       if (del) return '<del>' + del + '</del>';
-      if (imgSrc) return '<img src="' + imgSrc + '" alt="' + (imgAlt || '') + '" style="max-width:100%;border-radius:4px">';
-      if (linkHref) return '<a href="' + linkHref + '" target="_blank" rel="noopener">' + (linkText || linkHref) + '</a>';
+      if (imgSrc) {
+        const escapedAlt = (imgAlt || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        let safeSrc = imgSrc.replace(/"/g, '%22');
+        // 本地绝对路径转为 local-img:// 协议
+        if (/^[a-zA-Z]:\\|^\/[a-zA-Z]/.test(safeSrc) || safeSrc.startsWith('file://') || safeSrc.startsWith('file:///')) {
+          safeSrc = 'local-img://' + safeSrc.replace(/^file:\/\/\/?/, '');
+        }
+        return '<img src="' + safeSrc + '" alt="' + escapedAlt + '" style="max-width:100%;border-radius:4px">';
+      }
+      if (linkHref) {
+        // 协议白名单：只允许 http/https
+        let safeHref = linkHref;
+        try {
+          const parsed = new URL(linkHref);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') safeHref = '#';
+        } catch { safeHref = '#'; }
+        const escapedLinkText = (linkText || linkHref).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<a href="' + safeHref + '" target="_blank" rel="noopener">' + escapedLinkText + '</a>';
+      }
       return _match;
     });
   }
@@ -182,7 +199,16 @@ const notes = (() => {
       return allNotes.filter(n => n.deletedAt);
     }
 
-    // 正常视图：排除已删除的
+    // 全部视图：只排除已删除
+    if (typeFilter === 'all') {
+      return allNotes.filter(n => {
+        if (n.deletedAt) return false;
+        if (searchQuery && !(n.content || '').toLowerCase().includes(searchQuery)) return false;
+        return true;
+      });
+    }
+
+    // 分类视图：排除已删除，匹配类型
     return allNotes.filter(n => {
       if (n.deletedAt) return false;
       if (typeFilter === 'timeline') {
@@ -190,7 +216,7 @@ const notes = (() => {
       } else {
         if (getEffectiveType(n) !== typeFilter) return false;
       }
-      if (searchQuery && !n.content.toLowerCase().includes(searchQuery)) return false;
+      if (searchQuery && !(n.content || '').toLowerCase().includes(searchQuery)) return false;
       return true;
     });
   }
@@ -233,6 +259,22 @@ const notes = (() => {
         card.classList.add('note-card--reminder-flash');
         setTimeout(() => card.classList.remove('note-card--reminder-flash'), 2000);
       }
+    });
+
+    // 笔记区域空白处右键：新建便签
+    const notesArea = document.getElementById('notes-area');
+    notesArea.addEventListener('contextmenu', (e) => {
+      // 如果右键在卡片上，由卡片自己的 handler 处理
+      if (e.target.closest('.note-card')) return;
+      e.preventDefault();
+      const typeFilter = sidebar.getFilter();
+      if (typeFilter === 'trash') return;
+      contextMenu.show(e.clientX, e.clientY, [
+        { label: '今日待办', icon: '🔴', action: () => { state.addNote('daily'); sidebar.setActive('daily'); } },
+        { label: '周待办', icon: '🟠', action: () => { state.addNote('weekly'); sidebar.setActive('weekly'); } },
+        { label: '普通便签', icon: '🟢', action: () => { state.addNote('normal'); sidebar.setActive('normal'); } },
+        { label: '时间轴', icon: '🩷', action: () => { state.addNote('timeline'); sidebar.setActive('timeline'); } },
+      ]);
     });
 
     render();
@@ -305,7 +347,10 @@ const notes = (() => {
       header.appendChild(purgeBtn);
       container.appendChild(header);
       filtered.forEach(note => {
-        container.appendChild(createTrashCard(note));
+        const el = createTrashCard(note);
+        container.appendChild(el);
+        // 记录到 lastRendered，确保切换视图时 diff 能正确移除
+        lastRendered.set(note.id, { key: 'trash', element: el });
       });
       return;
     }
@@ -320,30 +365,32 @@ const notes = (() => {
       const key = renderKey(note);
       const prev = lastRendered.get(note.id);
       if (prev && prev.key === key) {
-        // renderKey 未变，复用已有 DOM
         newRendered.set(note.id, prev);
         cards.push(prev.element);
       } else {
-        // renderKey 变化或新便签，重建卡片
         const el = createCard(note);
         newRendered.set(note.id, { key, element: el });
         cards.push(el);
       }
     }
 
-    // 2. 移除不再显示的卡片及其弹窗
+    // 2. 移除不再显示的卡片、回收站 header、尾部拖放区域
     for (const [id, entry] of lastRendered) {
       if (!newIds.has(id)) {
         entry.element.remove();
       }
     }
+    const cardSet = new Set(cards);
+    Array.from(container.children).forEach(child => {
+      if (!cardSet.has(child) && !child.classList.contains('note-card__trailing-zone')) {
+        child.remove();
+      }
+    });
 
     // 3. 按正确顺序排列卡片到容器
-    // 先移除尾部拖放区域（稍后重建）
     const oldTrailing = container.querySelector('.note-card__trailing-zone');
     if (oldTrailing) oldTrailing.remove();
 
-    // 逐个检查并调整 DOM 顺序
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
       const ref = container.children[i];
@@ -941,12 +988,42 @@ const notes = (() => {
       setTimeout(() => showEditMode(), 50);
     }
 
+    // ---- 右键菜单 ----
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const isTrash = !!note.deletedAt;
+      if (isTrash) {
+        contextMenu.show(e.clientX, e.clientY, [
+          { label: '恢复', icon: '↩', action: () => state.restoreNote(note.id) },
+          { sep: true },
+          { label: '彻底删除', icon: '🗑', action: () => state.permanentDeleteNote(note.id), danger: true },
+        ]);
+      } else {
+        const items = [
+          { label: '复制内容', icon: '📋', action: () => navigator.clipboard.writeText(note.content || '') },
+        ];
+        if (note.type !== 'normal' || sidebar.getFilter() === 'normal' || sidebar.getFilter() === 'all') {
+          items.push({ label: note.completed ? '取消完成' : '标记完成', icon: note.completed ? '↩' : '✓', action: () => state.updateNote(note.id, { completed: !note.completed }) });
+        }
+        items.push({ label: '设置提醒', icon: '⏰', action: () => {
+          const bell = card.querySelector('.note-card__reminder .note-card__bell');
+          if (bell) bell.click();
+        }});
+        items.push({ sep: true });
+        items.push({ label: '删除', icon: '🗑', action: () => state.deleteNote(note.id), danger: true });
+        contextMenu.show(e.clientX, e.clientY, items);
+      }
+    });
+
     return card;
   }
 
   function isExpired(note) {
     if (note.type !== 'timeline' || !note.customDate || note.completed) return false;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' +
+      String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
     return note.customDate < todayStr;
   }
 

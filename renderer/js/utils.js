@@ -1,9 +1,6 @@
-// UUID v4 生成
+// UUID v4 生成（使用密码学安全随机数）
 function uuid() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : r & 0x3 | 0x8).toString(16);
-  });
+  return crypto.randomUUID();
 }
 
 // 防抖
@@ -21,7 +18,10 @@ function getEffectiveType(note) {
   if (note.type !== 'timeline' || !note.customDate) return note.type;
 
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  // 使用本地时区日期（避免 toISOString() 返回 UTC 导致 off-by-one）
+  const todayStr = today.getFullYear() + '-' +
+    String(today.getMonth() + 1).padStart(2, '0') + '-' +
+    String(today.getDate()).padStart(2, '0');
   if (note.customDate === todayStr) return 'daily';
 
   const custom = new Date(note.customDate + 'T00:00:00');
@@ -36,13 +36,12 @@ function getEffectiveType(note) {
 
 // 统计各类便签数量（含回收站）
 function computeNoteCounts(notes) {
-  const counts = { daily: 0, weekly: 0, normal: 0, timeline: 0, trash: 0 };
+  const counts = { all: 0, daily: 0, weekly: 0, normal: 0, timeline: 0, trash: 0 };
   notes.forEach(n => {
     if (n.deletedAt) { counts.trash++; return; }
-    if (n.type === 'timeline') counts.timeline++;
+    counts.all++; // 全部 = 非删除便签总数
     const effective = getEffectiveType(n);
-    if (effective !== 'timeline') counts[effective]++;
-    else if (n.type !== 'timeline') counts[n.type]++;
+    if (counts[effective] !== undefined) counts[effective]++;
   });
   return counts;
 }

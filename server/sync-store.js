@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { app } = require('electron');
 
 let syncPath;
+let cachedSync = null;
 
 function getSyncPath() {
   if (!syncPath) {
@@ -18,16 +19,23 @@ function getSyncPath() {
 }
 
 function loadSync() {
+  if (cachedSync) return cachedSync;
   try {
     const fp = getSyncPath();
-    if (!fs.existsSync(fp)) return {};
-    return JSON.parse(fs.readFileSync(fp, 'utf-8'));
+    if (!fs.existsSync(fp)) {
+      cachedSync = {};
+      return cachedSync;
+    }
+    cachedSync = JSON.parse(fs.readFileSync(fp, 'utf-8'));
+    return cachedSync;
   } catch {
-    return {};
+    cachedSync = {};
+    return cachedSync;
   }
 }
 
 function saveSync(data) {
+  cachedSync = data;
   fs.writeFileSync(getSyncPath(), JSON.stringify(data, null, 2), 'utf-8');
 }
 

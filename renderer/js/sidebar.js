@@ -1,8 +1,8 @@
 const sidebar = (() => {
-  const TYPES = ['daily', 'weekly', 'normal', 'timeline'];
-  const LABELS = { daily: '今日', weekly: '周', normal: '便签', timeline: '时间轴' };
+  const TYPES = ['all', 'daily', 'weekly', 'normal', 'timeline'];
+  const LABELS = { all: '全部', daily: '今日', weekly: '周', normal: '便签', timeline: '时间轴' };
 
-  let activeType = 'daily';
+  let activeType = 'all';
   let filterCallback = null;
 
   function init() {

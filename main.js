@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -45,7 +45,6 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
       preload: `${__dirname}/preload.js`
     }
   });
@@ -95,16 +94,19 @@ function createTray() {
   function toggleVisibility() {
     if (!mainWindow) return;
     const s = snap.getState();
-    if (s && !s.isShowing) {
-      snap.showWindow();
+    if (!mainWindow.isVisible()) {
+      // 窗口被隐藏（托盘/最小化），先 show 再处理贴边
+      mainWindow.show();
+      if (s && !s.isShowing) {
+        snap.showWindow();
+      }
       mainWindow.focus();
     } else if (s && s.isShowing) {
+      // 贴边展开中 → 收回
       snap.hideWindow();
-    } else if (mainWindow.isVisible()) {
-      mainWindow.hide();
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      // 正常显示中 → 隐藏
+      mainWindow.hide();
     }
   }
 
@@ -126,6 +128,16 @@ function createTray() {
 
 // ---- 应用启动 ----
 app.whenReady().then(() => {
+  // 注册自定义协议，用于安全加载本地图片（替代 webSecurity: false）
+  protocol.registerFileProtocol('local-img', (request, callback) => {
+    const filePath = decodeURIComponent(request.url.replace('local-img://', ''));
+    // 只允许图片文件
+    const ext = path.extname(filePath).toLowerCase();
+    const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.ico'];
+    if (!allowed.includes(ext)) return callback({ error: -6 }); // net::ERR_FILE_NOT_FOUND
+    callback({ path: filePath });
+  });
+
   // 防火墙规则
   try {
     const fwCmd = 'powershell -NoProfile -Command "if (!(Get-NetFirewallRule -DisplayName \'片笺 同步\' -EA SilentlyContinue)) { New-NetFirewallRule -DisplayName \'片笺 同步\' -Direction Inbound -Protocol TCP -LocalPort 48484,48485 -Action Allow -Profile Any | Out-Null; New-NetFirewallRule -DisplayName \'片笺 发现\' -Direction Inbound -Protocol UDP -LocalPort 48483 -Action Allow -Profile Any | Out-Null }"';

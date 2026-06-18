@@ -3,6 +3,7 @@ const { Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { loadNotes, saveNotes } = require('../server/data-store');
+const syncManager = require('../server/sync-manager');
 
 const ICON_PATH = (() => {
   const prodPath = path.join(process.resourcesPath || '', 'icon.png');
@@ -83,7 +84,18 @@ function checkReminders() {
     }
   });
 
-  if (modified) saveNotes(notes);
+  if (modified) {
+    saveNotes(notes);
+    // 同步广播：通知其他设备提醒时间已更新
+    triggered.forEach(note => {
+      syncManager.broadcast({
+        type: 'note_update',
+        id: note.id,
+        changes: { remindAt: note.remindAt },
+        updatedAt: note.updatedAt
+      });
+    });
+  }
 
   triggered.forEach(note => triggerReminder(note));
 }

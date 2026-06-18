@@ -1,13 +1,9 @@
 const dgram = require('dgram');
-const crypto = require('crypto');
 const os = require('os');
+const { sha256 } = require('./crypto-utils');
 
 const UDP_PORT = 48483;
 const BEACON_INTERVAL = 3000;
-
-function sha256(data) {
-  return crypto.createHash('sha256').update(data).digest('hex');
-}
 
 function getLocalIPs() {
   const ips = [];

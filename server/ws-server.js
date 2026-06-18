@@ -1,10 +1,6 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
-const crypto = require('crypto');
-
-function sha256(data) {
-  return crypto.createHash('sha256').update(data).digest('hex');
-}
+const { sha256 } = require('./crypto-utils');
 
 async function createServer(code, onMessage, onPeerConnected, onPeerDisconnected, onError) {
   const targetToken = sha256(code);

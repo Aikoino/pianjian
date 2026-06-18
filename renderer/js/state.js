@@ -57,7 +57,7 @@ const state = (() => {
   async function restoreNote(id) {
     const note = notes.find(n => n.id === id);
     if (note) {
-      note.deletedAt = undefined;
+      note.deletedAt = null;
       note.updatedAt = new Date().toISOString();
       await window.electronAPI.updateNote(id, { deletedAt: null, updatedAt: note.updatedAt });
     }
@@ -89,7 +89,7 @@ const state = (() => {
   }
 
   // 拖拽排序：将 noteId 移动到 targetId 之前/之后，或末尾
-  function reorderNotes(noteId, targetId, position) {
+  async function reorderNotes(noteId, targetId, position) {
     const fromIdx = notes.findIndex(n => n.id === noteId);
     if (fromIdx === -1) return;
     const [moved] = notes.splice(fromIdx, 1);
@@ -102,7 +102,11 @@ const state = (() => {
       notes.splice(toIdx, 0, moved);
     }
     // 持久化新顺序
-    window.electronAPI.saveAllNotes(notes);
+    try {
+      await window.electronAPI.saveAllNotes(notes);
+    } catch (e) {
+      console.error('[state] 保存排序失败:', e);
+    }
     notify();
   }
 

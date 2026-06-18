@@ -15,6 +15,7 @@ function log(...args) { if (DEBUG) console.log('[snap]', ...args); }
 let mainWindow = null;
 let snapState = null;
 let ignoreMove = false;
+let ignoreMoveTimer = null;
 let snapPending = null;
 let cooldownTimer = null;
 let unsnapCooldown = false;
@@ -35,7 +36,8 @@ let saveBoundsTimer = null;
 function setPosSafely(x, y) {
   ignoreMove = true;
   mainWindow.setPosition(x, y);
-  setTimeout(() => { ignoreMove = false; }, 150);
+  if (ignoreMoveTimer) clearTimeout(ignoreMoveTimer);
+  ignoreMoveTimer = setTimeout(() => { ignoreMove = false; }, 150);
 }
 
 function scheduleSaveBounds() {
@@ -213,6 +215,7 @@ function startHoverPoll() {
         if (!hoverStart) hoverStart = Date.now();
         else if (Date.now() - hoverStart >= HOVER_DELAY) {
           showWindow();
+          hoverStart = 0; // 避免重复调用
         }
       } else {
         hoverStart = 0;
@@ -307,6 +310,9 @@ function cleanup() {
   stopHoverPoll();
   stopResizePoll();
   if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = null; }
+  if (snapPending) { clearTimeout(snapPending); snapPending = null; }
+  if (saveBoundsTimer) { clearTimeout(saveBoundsTimer); saveBoundsTimer = null; }
+  if (ignoreMoveTimer) { clearTimeout(ignoreMoveTimer); ignoreMoveTimer = null; }
 }
 
 module.exports = {

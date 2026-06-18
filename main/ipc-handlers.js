@@ -1,14 +1,11 @@
 // 所有 IPC 处理器
 const { ipcMain, dialog, shell } = require('electron');
-const { exec } = require('child_process');
 const https = require('https');
 const path = require('path');
 const { loadNotes, saveNotes } = require('../server/data-store');
 const { getCloseAction, setCloseAction, setIsPinned, getIsPinned } = require('../server/config-store');
 const syncManager = require('../server/sync-manager');
 const snap = require('./snap');
-
-const AUTORUN_NAME = 'Pianjian';
 
 let mainWindow = null;
 let isPinned = false;
@@ -17,18 +14,32 @@ let isQuitting = false;
 function setQuitting(v) { isQuitting = v; }
 function getQuitting() { return isQuitting; }
 
-// ---- 开机启动 ----
-function runPowerShell(script, callback) {
-  const base64 = Buffer.from(script, 'utf16le').toString('base64');
-  exec(`powershell -NoProfile -EncodedCommand ${base64}`, callback);
+// ---- 版本比较（语义化，替代字符串比较） ----
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
 }
 
-function getLaunchTarget(app) {
-  if (app.isPackaged) return `"${process.execPath}"`;
-  return `"${process.execPath}" "${path.join(__dirname, '..', 'main.js')}"`;
+// ---- notes 字段白名单 ----
+const NOTE_MUTABLE_FIELDS = ['content', 'type', 'customDate', 'collapsed', 'order'];
+
+function sanitizeNoteChanges(changes) {
+  const safe = {};
+  for (const key of NOTE_MUTABLE_FIELDS) {
+    if (key in changes) safe[key] = changes[key];
+  }
+  return safe;
 }
 
-// ---- 更新检查 ----
+function isValidNoteArray(arr) {
+  return Array.isArray(arr) && arr.every(n => n && typeof n.id === 'string' && n.id.length > 0);
+}
 function checkForUpdate() {
   return new Promise((resolve) => {
     const options = {
@@ -45,7 +56,7 @@ function checkForUpdate() {
           const release = JSON.parse(data);
           const latestVersion = release.tag_name?.replace('v', '') || '';
           const currentVersion = require('../package.json').version;
-          const hasUpdate = latestVersion && latestVersion !== currentVersion;
+          const hasUpdate = latestVersion && compareVersions(latestVersion, currentVersion) > 0;
           const downloadUrl = release.html_url || '';
           const releaseNotes = release.body || '';
           resolve({ hasUpdate, latestVersion, currentVersion, downloadUrl, releaseNotes });
@@ -108,28 +119,24 @@ function registerIpcHandlers(win, app) {
     setIsPinned(isPinned);
   });
 
-  // 开机自启
+  // 开机自启（使用 Electron 原生 API，无需 PowerShell）
   ipcMain.handle('autoLaunch:get', () => {
-    return new Promise((resolve) => {
-      const ps = `if (Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -EA SilentlyContinue) { exit 0 } else { exit 1 }`;
-      runPowerShell(ps, (err) => resolve(!err));
-    });
+    try {
+      return app.getLoginItemSettings().openAtLogin || false;
+    } catch (e) {
+      console.error('[autoLaunch] 获取自启状态失败:', e);
+      return false;
+    }
   });
 
   ipcMain.handle('autoLaunch:set', (_event, enabled) => {
-    return new Promise((resolve) => {
-      if (enabled) {
-        const target = getLaunchTarget(app);
-        const ps = `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -Value '${target}' -Type String -Force`;
-        runPowerShell(ps, (err) => {
-          if (err) { console.error('autoLaunch set error:', err); resolve(false); }
-          else resolve(true);
-        });
-      } else {
-        const ps = `Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '${AUTORUN_NAME}' -EA SilentlyContinue -Force`;
-        runPowerShell(ps, () => resolve(true));
-      }
-    });
+    try {
+      app.setLoginItemSettings({ openAtLogin: enabled });
+      return true;
+    } catch (e) {
+      console.error('[autoLaunch] 设置自启失败:', e);
+      return false;
+    }
   });
 
   // 数据操作
@@ -147,7 +154,8 @@ function registerIpcHandlers(win, app) {
     const idx = notes.findIndex(n => n.id === id);
     if (idx !== -1) {
       const updatedAt = new Date().toISOString();
-      Object.assign(notes[idx], changes, { updatedAt });
+      const safeChanges = sanitizeNoteChanges(changes);
+      Object.assign(notes[idx], safeChanges, { updatedAt });
       saveNotes(notes);
       syncManager.broadcast({ type: 'note_update', id, changes, updatedAt });
     }
@@ -161,6 +169,10 @@ function registerIpcHandlers(win, app) {
   });
 
   ipcMain.handle('notes:saveAll', (_event, orderedNotes) => {
+    if (!isValidNoteArray(orderedNotes)) {
+      console.error('[notes:saveAll] 无效数据，已拒绝');
+      return;
+    }
     saveNotes(orderedNotes);
   });
 
@@ -190,7 +202,16 @@ function registerIpcHandlers(win, app) {
   ipcMain.handle('update:check', () => checkForUpdate());
 
   ipcMain.on('shell:openExternal', (_event, url) => {
-    shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(url);
+      } else {
+        console.warn('[shell] 已拦截非 HTTP 协议 URL:', url);
+      }
+    } catch (e) {
+      console.warn('[shell] 无效的 URL:', url);
+    }
   });
 }
 

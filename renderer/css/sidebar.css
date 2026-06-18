@@ -47,6 +47,7 @@
 .sidebar__tab--weekly.sidebar__tab--active::before  { background: var(--color-weekly-text); }
 .sidebar__tab--normal.sidebar__tab--active::before  { background: var(--color-normal-text); }
 .sidebar__tab--timeline.sidebar__tab--active::before { background: var(--color-timeline-text); }
+.sidebar__tab--all.sidebar__tab--active::before     { background: var(--color-text-muted); }
 
 .sidebar__dot {
   width: 10px;
@@ -59,6 +60,7 @@
 .sidebar__dot--weekly   { background: var(--color-weekly-bg); }
 .sidebar__dot--normal   { background: var(--color-normal-bg); }
 .sidebar__dot--timeline { background: var(--color-timeline-bg); }
+.sidebar__dot--all      { background: var(--color-text-muted); }
 
 .sidebar__count {
   font-size: 9px;
@@ -76,6 +78,7 @@
 .sidebar__count--weekly   { background: var(--color-weekly-text); }
 .sidebar__count--normal   { background: var(--color-normal-text); }
 .sidebar__count--timeline { background: var(--color-timeline-text); }
+.sidebar__count--all      { background: var(--color-text-muted); }
 .sidebar__count--trash    { background: #999; }
 
 .sidebar__count:empty {

@@ -135,9 +135,9 @@ pianjian/
 完整开发计划请查看 [ROADMAP.md](ROADMAP.md)。
 
 当前重点：
-- WebSocket 局域网同步
-- 提醒功能完善
 - 数据导入/导出
+- 深色模式
+- 格式工具栏
 
 ## 许可
 
