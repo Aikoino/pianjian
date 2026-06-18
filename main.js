@@ -186,6 +186,12 @@ app.whenReady().then(() => {
   }, 5000);
 
   // 开机自启 → 隐藏到托盘；否则显示窗口
+  // 开发模式下清除错误的自启动注册（electron.exe 无参数会显示欢迎页）
+  const isDev = !fs.existsSync(path.join(__dirname, 'app.asar'));
+  if (isDev && app.getLoginItemSettings().openAtLogin) {
+    console.log('[autoLaunch] 开发模式，清除自启动注册');
+    app.setLoginItemSettings({ openAtLogin: false });
+  }
   if (app.getLoginItemSettings().openAtLogin) {
     mainWindow?.hide();
   } else if (savedSnap) {

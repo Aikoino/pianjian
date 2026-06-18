@@ -132,6 +132,12 @@ function registerIpcHandlers(win, app) {
 
   ipcMain.handle('autoLaunch:set', (_event, enabled) => {
     try {
+      // 开发模式下 electron.exe 无参数启动会显示欢迎页，跳过注册
+      const isDev = !fs.existsSync(path.join(__dirname, '..', 'app.asar'));
+      if (isDev) {
+        console.log('[autoLaunch] 开发模式，跳过自启动注册');
+        return false;
+      }
       app.setLoginItemSettings({ openAtLogin: enabled });
       return true;
     } catch (e) {
